@@ -1,5 +1,6 @@
-// log implements a simple verbosity logger interface. User of ggen package can replace the default logger with their own version of logger.
-package log
+// lg implements a simple verbosity logger interface. User of ggen package can
+// replace the default logger with their own version of logger.
+package lg
 
 import (
 	"log"
@@ -8,7 +9,13 @@ import (
 )
 
 type Logger interface {
+
+	// Verbosed checks if the current verbosity level is equal or higher than
+	// the param
 	Verbosed(verbosity int) bool
+
+	// V returns a VerbosedLogger, which only outputs log when the current
+	// verbosity level is equal or higher than the log line
 	V(verbosity int) VerbosedLogger
 }
 
@@ -22,7 +29,7 @@ var verbosity int
 
 func init() {
 	New = newLogger
-	verbosity, _ = strconv.Atoi(os.Getenv("LOGGING"))
+	verbosity, _ = strconv.Atoi(os.Getenv("GGEN_LOGGING"))
 }
 
 type logger int

@@ -12,14 +12,14 @@ import (
 	"golang.org/x/tools/go/packages"
 
 	"github.com/olvrng/ggen/errors"
-	"github.com/olvrng/ggen/log"
+	"github.com/olvrng/ggen/lg"
 )
 
 const defaultGeneratedFileNameTpl = "zz_generated.%v.go"
 const defaultBufSize = 1024 * 4
 const startDirectiveStr = "// +"
 
-var ll = log.New()
+var ll = lg.New()
 var reCommand = regexp.MustCompile(`[a-z]([a-z0-9.:-]*[a-z0-9])?`)
 
 func FilterByCommand(command string) CommandFilter {
