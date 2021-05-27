@@ -82,7 +82,7 @@ type engine struct {
 	pkgcfg  packages.Config
 	pkgMap  map[string]*packages.Package
 	srcMap  map[string][]byte
-	bufPool sync.Pool
+	bufPool *sync.Pool
 
 	builtinTypes           map[string]types.Type
 	cleanedFileNames       map[string]bool
@@ -104,6 +104,7 @@ func newEngine() *engine {
 	return &engine{
 		pkgMap:     make(map[string]*packages.Package),
 		pluginsMap: make(map[string]*pluginStruct),
+		bufPool:    &sync.Pool{},
 	}
 }
 
