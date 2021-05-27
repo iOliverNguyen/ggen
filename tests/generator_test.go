@@ -9,10 +9,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/ng-vu/ggen"
+	"github.com/olvrng/ggen"
 )
 
-const testPath = "github.com/ng-vu/ggen/tests"
+const testPath = "github.com/olvrng/ggen/tests"
 const testPatterns = testPath + "/..."
 
 type mockPlugin struct {

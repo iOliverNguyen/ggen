@@ -1,6 +1,10 @@
 package ggen
 
-import "go/types"
+import (
+	"go/types"
+
+	"github.com/olvrng/ggen/errors"
+)
 
 type Filterer interface {
 	Filter(FilterEngine) error
@@ -27,7 +31,7 @@ type pluginStruct struct {
 func RegisterPlugin(plugins ...Plugin) error {
 	for _, plugin := range plugins {
 		if err := theEngine.registerPlugin(plugin); err != nil {
-			return Errorf(err, "register plugin %v: %v", plugin.Name(), err)
+			return errors.Errorf(err, "register plugin %v: %v", plugin.Name(), err)
 		}
 	}
 	return nil
@@ -36,13 +40,13 @@ func RegisterPlugin(plugins ...Plugin) error {
 func (ng *engine) registerPlugin(plugin Plugin) error {
 	name := plugin.Name()
 	if name == "" {
-		return Errorf(nil, "empty name")
+		return errors.Errorf(nil, "empty name")
 	}
 	if plugin == nil {
-		return Errorf(nil, "nil plugin")
+		return errors.Errorf(nil, "nil plugin")
 	}
 	if ng.pluginsMap[name] != nil {
-		return Errorf(nil, "duplicated pluginStruct name: %v", name)
+		return errors.Errorf(nil, "duplicated pluginStruct name: %v", name)
 	}
 
 	pl := &pluginStruct{name: name, plugin: plugin, index: len(ng.plugins)}

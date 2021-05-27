@@ -13,7 +13,7 @@ type Logger interface {
 }
 
 type VerbosedLogger interface {
-	Debugf(format string, args ...interface{})
+	Printf(format string, args ...interface{})
 }
 
 var New func() Logger
@@ -35,7 +35,7 @@ func (_ logger) Verbosed(v int) bool {
 	return v <= verbosity
 }
 
-func (l logger) Debugf(format string, args ...interface{}) {
+func (l logger) Printf(format string, args ...interface{}) {
 	if int(l) <= verbosity {
 		log.Printf(format, args...)
 	}

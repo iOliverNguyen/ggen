@@ -13,6 +13,8 @@ import (
 	"sync"
 
 	"golang.org/x/tools/go/packages"
+
+	"github.com/olvrng/ggen/errors"
 )
 
 var buildFlags = strings.Split("-tags generator", " ")
@@ -41,10 +43,10 @@ func Start(cfg Config, patterns ...string) error {
 func (ng *engine) start(cfg Config, patterns ...string) (_err error) {
 	{
 		if len(patterns) == 0 {
-			return Errorf(nil, "no patterns")
+			return errors.Errorf(nil, "no patterns")
 		}
 		if len(ng.plugins) == 0 {
-			return Errorf(nil, "no registed plugins")
+			return errors.Errorf(nil, "no registed plugins")
 		}
 		if err := ng.validateConfig(&cfg); err != nil {
 			return err
@@ -60,7 +62,7 @@ func (ng *engine) start(cfg Config, patterns ...string) (_err error) {
 		}
 		pkgs, err := packages.Load(&ng.pkgcfg, patterns...)
 		if err != nil {
-			return Errorf(err, "can not load package: %v", err)
+			return errors.Errorf(err, "can not load package: %v", err)
 		}
 
 		// populate cleanedFileNames
@@ -73,9 +75,9 @@ func (ng *engine) start(cfg Config, patterns ...string) (_err error) {
 		for _, pkg := range pkgs {
 			pkgDir := getPackageDir(pkg)
 			if pkgDir == "" {
-				return Errorf(nil, "no Go files found in package %v", pkg.PkgPath)
+				return errors.Errorf(nil, "no Go files found in package %v", pkg.PkgPath)
 			}
-			if err := cleanDir(cleanedFileNames, pkgDir); err != nil {
+			if err = cleanDir(cleanedFileNames, pkgDir); err != nil {
 				return err
 			}
 		}
@@ -91,7 +93,7 @@ func (ng *engine) start(cfg Config, patterns ...string) (_err error) {
 
 		if ll.Verbosed(4) {
 			for _, pkg := range ng.collectedPackages {
-				ll.V(4).Debugf("collected package: %v", pkg.PkgPath)
+				ll.V(4).Printf("collected package: %v", pkg.PkgPath)
 			}
 		}
 	}
@@ -112,9 +114,9 @@ func (ng *engine) start(cfg Config, patterns ...string) (_err error) {
 			pkgPatterns = append(pkgPatterns, pkg.PkgPath)
 		}
 		if ll.Verbosed(3) {
-			ll.V(3).Debugf("load all syntax from:")
+			ll.V(3).Printf("load all syntax from:")
 			for _, p := range pkgPatterns {
-				ll.V(3).Debugf(p)
+				ll.V(3).Printf(p)
 			}
 		}
 		if len(pkgPatterns) == 0 {
@@ -130,7 +132,7 @@ func (ng *engine) start(cfg Config, patterns ...string) (_err error) {
 		}
 		pkgs, err := packages.Load(&ng.pkgcfg, pkgPatterns...)
 		if err != nil {
-			return Errorf(err, "can not load package: %v", err)
+			return errors.Errorf(err, "can not load package: %v", err)
 		}
 
 		// populate xinfo
@@ -140,8 +142,8 @@ func (ng *engine) start(cfg Config, patterns ...string) (_err error) {
 				if cfg.Namespace != "" && !strings.HasPrefix(pkg.PkgPath, cfg.Namespace) {
 					return true
 				}
-				if err := ng.xinfo.AddPackage(pkg); err != nil {
-					_err = err
+				if err2 := ng.xinfo.AddPackage(pkg); err2 != nil {
+					_err = err2
 					return false
 				}
 				return true
@@ -166,7 +168,7 @@ func (ng *engine) start(cfg Config, patterns ...string) (_err error) {
 		for _, pl := range ng.enabledPlugins {
 			wrapNg := &wrapEngine{engine: ng, plugin: pl}
 			if err := pl.plugin.Generate(wrapNg); err != nil {
-				return Errorf(err, "%v: %v", pl.name, err)
+				return errors.Errorf(err, "%v: %v", pl.name, err)
 			}
 			for _, gpkg := range wrapNg.pkgs {
 				prt := gpkg.printer
@@ -215,7 +217,7 @@ func (ng *engine) collectPackages(pkgs []*packages.Package) error {
 			patterns: &ng.includedPatterns,
 		}
 		if err = pl.plugin.Filter(filterNg); err != nil {
-			return Errorf(err, "plugin %v: %v", pl.name, err)
+			return errors.Errorf(err, "plugin %v: %v", pl.name, err)
 		}
 	}
 	ng.collectedPackages = collectedPackages
@@ -226,8 +228,8 @@ func (ng *engine) collectPackages(pkgs []*packages.Package) error {
 	}
 
 	srcMap := make(map[string][]byte)
-	for _, fileContent := range fileContents {
-		srcMap[fileContent.Path] = fileContent.Body
+	for _, content := range fileContents {
+		srcMap[content.Path] = content.Body
 	}
 	ng.srcMap = srcMap
 	return nil
@@ -266,14 +268,13 @@ func collectPackages(
 	limit := make(chan struct{}, 16) // limit concurrency
 	collectedPackages = make([]filteringPackage, len(pkgs))
 	for i := range pkgs {
-		i, pkg := i, pkgs[i] // capture values for closure
-		limit <- struct{}{}  // limit
+		limit <- struct{}{} // limit
 		wg.Add(1)
-		go func() {
+		go func(i int, pkg *packages.Package) {
 			defer func() { wg.Done(); <-limit }() // release limit
 			directives, inlineDirectives, err := parseDirectivesFromPackage(fileCh, pkg, cleanedFileNames)
 			if err != nil {
-				_err = Errorf(err, "parsing %v: %v", pkg.PkgPath, err)
+				_err = errors.Errorf(err, "parsing %v: %v", pkg.PkgPath, err)
 			}
 			p := filteringPackage{
 				PkgPath:          pkg.PkgPath,
@@ -282,14 +283,14 @@ func collectPackages(
 				InlineDirectives: inlineDirectives,
 			}
 			collectedPackages[i] = p
-		}()
+		}(i, pkgs[i])
 	}
 	wg.Wait()
 	close(fileCh)
 	close(errCh)
 	wg0.Wait()
 	if len(errs) != 0 {
-		_err = newErrors("can not parse packages", errs)
+		_err = errors.Errors("can not parse packages", errs)
 	}
 	return
 }
@@ -307,8 +308,8 @@ func cleanDir(cleanedFileNames map[string]bool, pkgDir string) error {
 	for _, name := range names {
 		if cleanedFileNames[name] {
 			absFileName := filepath.Join(pkgDir, name)
-			if err := os.Remove(absFileName); err != nil {
-				return Errorf(err, "can not remove file %v: %v", absFileName, err)
+			if err = os.Remove(absFileName); err != nil {
+				return errors.Errorf(err, "can not remove file %v: %v", absFileName, err)
 			}
 		}
 	}
@@ -330,7 +331,7 @@ func parseDirectivesFromPackage(fileCh chan<- fileContent, pkg *packages.Package
 			// ignore unknown directives
 			if ll.Verbosed(2) {
 				for _, e := range errs {
-					ll.V(1).Debugf("ignored %v", e)
+					ll.V(1).Printf("ignored %v", e)
 				}
 			}
 		}
@@ -385,7 +386,7 @@ func parseDirectivesFromBody(body []byte, directives, inlineDirectives *[]Direct
 func (ng *engine) validateConfig(cfg *Config) (_err error) {
 	defer func() {
 		if _err != nil {
-			_err = Errorf(_err, "config error: %v", _err)
+			_err = errors.Errorf(_err, "config error: %v", _err)
 		}
 	}()
 
@@ -394,7 +395,7 @@ func (ng *engine) validateConfig(cfg *Config) (_err error) {
 		for _, enabled := range cfg.EnabledPlugins {
 			pl := ng.pluginsMap[enabled]
 			if pl == nil {
-				return Errorf(nil, "plugin %v not found", enabled)
+				return errors.Errorf(nil, "plugin %v not found", enabled)
 			}
 			pl.enabled = true
 			ng.enabledPlugins = append(ng.enabledPlugins, pl)
@@ -437,10 +438,10 @@ func (ng *engine) execGoimport(files []string) error {
 	args = append(args, "-w")
 	args = append(args, files...)
 	cmd := exec.Command("goimports", args...)
-	ll.V(4).Debugf("goimports %v", args)
+	ll.V(4).Printf("goimports %v", args)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return Errorf(err, "goimports: %s\n\n%s\n", err, out)
+		return errors.Errorf(err, "goimports: %s\n\n%s\n", err, out)
 	}
 	return nil
 }

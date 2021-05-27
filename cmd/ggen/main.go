@@ -1,8 +1,8 @@
-package ggen
+package main
 
 import (
-	"github.com/ng-vu/ggen/gens/sample"
-	"github.com/ng-vu/ggen/ggencmd"
+	"github.com/olvrng/ggen/generators/sample"
+	"github.com/olvrng/ggen/ggencmd"
 )
 
 func main() {

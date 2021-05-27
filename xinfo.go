@@ -23,15 +23,15 @@ func (c Comment) Text() string {
 
 // Directive comment has one of following formats
 //
-//   // +etop:valid=required,optional
-//   // +etop:valid=null +gen=foo
-//   // +etop:pkg=foo,bar
-//   // +etop:valid: 0 < $ && $ <= 10
+//   // +foo:valid=required,optional
+//   // +foo:valid=null +gen=foo
+//   // +foo:pkg=sample,baz
+//   // +foo:valid: 0 < $ && $ <= 10
 //
-// For example "// +etop:pkg=foo,bar" will be parsed as
+// For example "// +foo:pkg=sample,baz" will be parsed as
 //
-//   Command: "etop:pkg"
-//   Arg:     "foo,bar"
+//   Command: "foo:pkg"
+//   Arg:     "sample,baz"
 //
 // Directives must start at the begin of a line, after "//" and a space (the
 // same as "// +build"). Multiple directives can appear in one line.
@@ -40,11 +40,11 @@ func (c Comment) Text() string {
 // multiple directives. Directive ending with ":" can have space in argument,
 // therefore it will be parsed as a single directive.
 type Directive struct {
-	Raw string // +etop:pkg:foo this is a string
+	Raw string // +foo:pkg:foo this is a string
 
-	Cmd string // etop:pkg
+	Cmd string // foo:pkg
 
-	Arg string // foo,bar
+	Arg string // sample,baz
 }
 
 type Directives []Directive
@@ -118,7 +118,7 @@ func (x *extendedInfo) AddPackage(pkg *packages.Package) error {
 
 func (x *extendedInfo) addFile(pkg *packages.Package, file *ast.File) error {
 	var genDoc *ast.CommentGroup
-	processDoc := func(doc, cmt *ast.CommentGroup, fallback bool) *declaration {
+	processDocFunc := func(doc, cmt *ast.CommentGroup, fallback bool) *declaration {
 		if fallback {
 			if doc == nil {
 				doc = genDoc
@@ -128,7 +128,7 @@ func (x *extendedInfo) addFile(pkg *packages.Package, file *ast.File) error {
 		}
 		comment, err := processDoc(doc, cmt)
 		if err != nil {
-			ll.V(3).Debugf("error while processing doc: %v", err)
+			ll.V(3).Printf("error while processing doc: %v", err)
 		}
 		return &declaration{
 			Pkg:     pkg,
@@ -142,7 +142,7 @@ func (x *extendedInfo) addFile(pkg *packages.Package, file *ast.File) error {
 		switch node := node.(type) {
 		case *ast.FuncDecl:
 			ident := node.Name
-			declarations[ident] = processDoc(node.Doc, nil, false)
+			declarations[ident] = processDocFunc(node.Doc, nil, false)
 			positions[ident.NamePos] = ident
 
 		case *ast.GenDecl:
@@ -156,18 +156,18 @@ func (x *extendedInfo) addFile(pkg *packages.Package, file *ast.File) error {
 
 		case *ast.TypeSpec:
 			ident := node.Name
-			declarations[ident] = processDoc(node.Doc, node.Comment, true)
+			declarations[ident] = processDocFunc(node.Doc, node.Comment, true)
 			positions[ident.NamePos] = ident
 
 		case *ast.ValueSpec:
 			for _, ident := range node.Names {
-				declarations[ident] = processDoc(node.Doc, node.Comment, true)
+				declarations[ident] = processDocFunc(node.Doc, node.Comment, true)
 				positions[ident.NamePos] = ident
 			}
 
 		case *ast.Field:
 			for _, ident := range node.Names {
-				declarations[ident] = processDoc(node.Doc, node.Comment, false)
+				declarations[ident] = processDocFunc(node.Doc, node.Comment, false)
 				positions[ident.NamePos] = ident
 			}
 		}

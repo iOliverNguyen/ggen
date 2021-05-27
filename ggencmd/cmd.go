@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/ng-vu/ggen"
+	"github.com/olvrng/ggen"
 )
 
 var flClean = flag.Bool("clean", false, "clean generated files without generating new files")
@@ -68,16 +68,18 @@ func allPluginNames(plugins []ggen.Plugin) []string {
 func calcEnabledPlugins(plugins []string, ignoredPlugins []string) []string {
 	result := make([]string, 0, len(plugins))
 	for _, p := range plugins {
-		include := true
-		for _, ip := range ignoredPlugins {
-			if p == ip {
-				include = false
-				break
-			}
-		}
-		if include {
+		if !contains(ignoredPlugins, p) {
 			result = append(result, p)
 		}
 	}
 	return result
+}
+
+func contains(ss []string, s string) bool {
+	for _, _s := range ss {
+		if _s == s {
+			return true
+		}
+	}
+	return false
 }

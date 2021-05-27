@@ -3,9 +3,9 @@
 ## Install
 
 ```
-go get github.com/ng-vu/ggen/cmd/ggen
+go get github.com/olvrng/ggen/cmd/ggen
 ```
 
 ## LICENSE
 
-[MIT](https://github.com/ng-vu/ggen/blob/master/LICENSE)
+[MIT](https://github.com/olvrng/ggen/blob/master/LICENSE)

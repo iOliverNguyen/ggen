@@ -1,4 +1,4 @@
-module github.com/ng-vu/ggen
+module github.com/olvrng/ggen
 
 go 1.12
 

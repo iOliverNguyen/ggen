@@ -80,9 +80,9 @@ func (p *printer) Close() (_err error) {
 		return err
 	}
 	defer func() {
-		err := w.Close()
+		err2 := w.Close()
 		if _err == nil {
-			_err = err
+			_err = err2
 		}
 	}()
 
@@ -90,9 +90,9 @@ func (p *printer) Close() (_err error) {
 		if _err != nil {
 			return
 		}
-		_, err := fmt.Fprintf(w, format, args...)
-		if err != nil {
-			_err = err
+		_, err2 := fmt.Fprintf(w, format, args...)
+		if err2 != nil {
+			_err = err2
 			return
 		}
 	}
