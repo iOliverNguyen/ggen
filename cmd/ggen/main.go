@@ -13,6 +13,7 @@ import (
 var flClean = flag.Bool("clean", false, "clean generated files without generating new files")
 var flPlugins = flag.String("plugins", "", "comma separated list of plugins for generating (default to all plugins)")
 var flIgnoredPlugins = flag.String("ignored-plugins", "", "comma separated list of plugins to ignore")
+var flNamespace = flag.String("namespace", "", "only parse and generate packages under this namespace (example: github.com/foo)")
 
 func usage() {
 	const text = `
@@ -49,16 +50,17 @@ func Start(plugins ...ggen.Plugin) {
 
 	cfg := ggen.Config{
 		CleanOnly:      *flClean,
-		Namespace:      "o.o",
+		Namespace:      *flNamespace,
 		EnabledPlugins: enabledPlugins,
-		GoimportsArgs:  []string{"-local", "o.o"},
+		GoimportsArgs:  []string{}, // example: -local github.com/foo
 	}
 
-	if err := ggen.RegisterPlugin(plugins...); err != nil {
-		fmt.Printf("%+v\n", err)
-		os.Exit(1)
-	}
-	if err := ggen.Start(cfg, patterns...); err != nil {
+	must(ggen.RegisterPlugin(plugins...))
+	must(ggen.Start(cfg, patterns...))
+}
+
+func must(err error) {
+	if err != nil {
 		fmt.Printf("%+v\n", err)
 		os.Exit(1)
 	}
