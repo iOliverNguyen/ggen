@@ -16,7 +16,7 @@ var flIgnoredPlugins = flag.String("ignored-plugins", "", "comma separated list 
 
 func usage() {
 	const text = `
-Usage: generator [OPTION] PATTERN ...
+Usage: ggen [OPTION] PATTERN ...
 
 Options:
 `
