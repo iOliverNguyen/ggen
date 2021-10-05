@@ -47,10 +47,14 @@ func (g *GeneratingPackage) GetObjects() []types.Object {
 }
 
 type Engine interface {
+
+	// GenerateEachPackage loops through the list of GeneratingPackages and call the given function.
 	GenerateEachPackage(func(Engine, *packages.Package, Printer) error) error
 
+	// GeneratingPackages returns a list of packages available for generating.
 	GeneratingPackages() []*GeneratingPackage
 
+	// GeneratePackage generates file at given package path with a default file name.
 	GeneratePackage(pkg *packages.Package, fileName string) (Printer, error)
 
 	// GenerateFile generates file at given path. It should be an absolute path. If the path ends with /, new file name will be generated.
