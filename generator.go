@@ -17,8 +17,6 @@ import (
 	"github.com/olvrng/ggen/errors"
 )
 
-var buildFlags = strings.Split("-tags generator", " ")
-
 type GenerateFileNameInput struct {
 	PluginName string
 }
@@ -34,6 +32,8 @@ type Config struct {
 	Namespace string
 
 	GoimportsArgs []string
+
+	BuildTags []string
 }
 
 func Start(cfg Config, patterns ...string) error {
@@ -53,6 +53,7 @@ func (ng *engine) start(cfg Config, patterns ...string) (_err error) {
 		}
 		ng.xcfg = cfg
 	}
+	buildFlags := getBuildFlags(cfg.BuildTags)
 	{
 		mode := packages.NeedName | packages.NeedImports | packages.NeedDeps |
 			packages.NeedFiles | packages.NeedCompiledGoFiles
@@ -72,11 +73,16 @@ func (ng *engine) start(cfg Config, patterns ...string) (_err error) {
 			filename := ng.genFilename(input)
 			cleanedFileNames[filename] = true
 		}
+
+		// list available packages
+		availablePkgs := make([]*packages.Package, 0, len(pkgs))
 		for _, pkg := range pkgs {
 			pkgDir := getPackageDir(pkg)
 			if pkgDir == "" {
-				return errors.Errorf(nil, "no Go files found in package %v", pkg.PkgPath)
+				ll.V(1).Printf("no Go files found in package: %v", pkg)
+				continue
 			}
+			availablePkgs = append(availablePkgs, pkg)
 			if err = cleanDir(cleanedFileNames, pkgDir); err != nil {
 				return err
 			}
@@ -87,7 +93,7 @@ func (ng *engine) start(cfg Config, patterns ...string) (_err error) {
 		}
 
 		// populate collectedPackages, includes, srcMap
-		if err = ng.collectPackages(pkgs); err != nil {
+		if err = ng.collectPackages(availablePkgs); err != nil {
 			return err
 		}
 
@@ -235,13 +241,22 @@ func (ng *engine) collectPackages(pkgs []*packages.Package) error {
 	return nil
 }
 
+func getBuildFlags(buildTags []string) []string {
+	var buildFlags = "-tags generator"
+	if len(buildTags) > 0 {
+		buildFlags += "," + strings.Join(buildTags, ",")
+	}
+	return strings.Split(buildFlags, " ")
+}
+
 type fileContent struct {
 	Path string
 	Body []byte
 }
 
 func collectPackages(
-	pkgs []*packages.Package, cleanedFileNames map[string]bool,
+	pkgs []*packages.Package,
+	cleanedFileNames map[string]bool,
 ) (collectedPackages []filteringPackage, files []fileContent, _err error) {
 
 	var wg0, wg sync.WaitGroup
@@ -326,6 +341,7 @@ func parseDirectivesFromPackage(fileCh chan<- fileContent, pkg *packages.Package
 			return nil, nil, err
 		}
 		fileCh <- fileContent{Path: file, Body: body}
+
 		errs := parseDirectivesFromBody(body, &directives, &inlineDirectives)
 		if len(errs) != 0 {
 			// ignore unknown directives
@@ -342,10 +358,14 @@ func parseDirectivesFromPackage(fileCh chan<- fileContent, pkg *packages.Package
 var startDirective = []byte(startDirectiveStr)
 
 func parseDirectivesFromBody(body []byte, directives, inlineDirectives *[]Directive) (errs []error) {
+
 	// store processing directives
 	var tmp []Directive
 	lastIdx := -1
-	for idx := 1; idx < len(body); idx++ {
+	if bytes.HasPrefix(body, startDirective) {
+		lastIdx = 0
+	}
+	for idx := 0; idx < len(body); idx++ {
 		if body[idx] != '\n' {
 			continue
 		}
@@ -376,7 +396,7 @@ func parseDirectivesFromBody(body []byte, directives, inlineDirectives *[]Direct
 			tmp = tmp[:0]
 			continue
 		}
-		lastIdx = idx + 1
+		lastIdx = idx
 	}
 	// source file should end with a newline, so we don't process remaining lastIdx
 	*directives = append(*directives, tmp...)

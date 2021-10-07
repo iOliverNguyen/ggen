@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/types"
+	"io/ioutil"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -11,6 +12,7 @@ import (
 
 	"golang.org/x/tools/go/packages"
 
+	_ "github.com/olvrng/ggen/builtin"
 	"github.com/olvrng/ggen/errors"
 	"github.com/olvrng/ggen/lg"
 )
@@ -132,16 +134,45 @@ func processDocText(doc *ast.CommentGroup) string {
 	return (&ast.CommentGroup{List: processedDoc}).Text()
 }
 
-func ParseDirective(text string) (result []Directive, _ error) {
-	text = strings.TrimSpace(text)
-	if strings.HasPrefix(text, "+build") {
-		return nil, nil
-	}
-	result, err := parseDirective(text, result)
+// ParseDirectiveFromFile reads from file and returns the parsed directives.
+func ParseDirectiveFromFile(filename string) (directives, inlineDirective []Directive, err error) {
+	body, err := ioutil.ReadFile(filename)
 	if err != nil {
-		return nil, errors.Errorf(err, "%v (%v)", err, text)
+		return
+	}
+	return ParseDirectiveFromBody(body)
+}
+
+// ParseDirectiveFromBody reads directives from body and returns the parsed directives.
+func ParseDirectiveFromBody(body []byte) (directives, inlineDirective []Directive, err error) {
+	errs := parseDirectivesFromBody(body, &directives, &inlineDirective)
+	err = Errors("can not parse directive", errs)
+	return
+}
+
+// ParseDirective parses directives from a single line.
+func ParseDirective(line string) (result []Directive, _ error) {
+	line = strings.TrimSpace(line)
+	if line == "+build" || strings.HasPrefix(line, "+build ") {
+		return parseBuildDirective(line)
+	}
+	result, err := parseDirective(line, result)
+	if err != nil {
+		return nil, errors.Errorf(err, "%v (%v)", err, line)
 	}
 	return result, nil
+}
+
+// TODO(olvrng): support new directive format //go:build
+// https://go.googlesource.com/proposal/+/master/design/draft-gobuild.md
+func parseBuildDirective(text string) ([]Directive, error) {
+	arg := strings.TrimSpace(strings.TrimPrefix(text, "+build"))
+	directive := Directive{
+		Raw: text,
+		Cmd: "build",
+		Arg: arg,
+	}
+	return []Directive{directive}, nil
 }
 
 func parseDirective(text string, result []Directive) ([]Directive, error) {

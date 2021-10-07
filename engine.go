@@ -54,10 +54,10 @@ type Engine interface {
 	// GeneratingPackages returns a list of packages available for generating.
 	GeneratingPackages() []*GeneratingPackage
 
-	// GeneratePackage generates file at given package path with a default file name.
+	// GeneratePackage generates file at given package path with the given file name. The file name must not include any slash character (/). If fileName is empty, use default file name.
 	GeneratePackage(pkg *packages.Package, fileName string) (Printer, error)
 
-	// GenerateFile generates file at given path. It should be an absolute path. If the path ends with /, new file name will be generated.
+	// GenerateFile generates file at given path. It should be an absolute path, can include slash character (/). If the path ends with /, use default file name.
 	GenerateFile(pkgName, filePath string) (Printer, error)
 
 	GetComment(Positioner) Comment
@@ -259,7 +259,7 @@ func generateFileName(ng *engine, plugin *pluginStruct) string {
 
 func (ng *wrapEngine) GeneratePackage(pkg *packages.Package, fileName string) (Printer, error) {
 	if strings.Contains(fileName, "/") {
-		return nil, errors.Errorf(nil, "invalid filename")
+		return nil, errors.Errorf(nil, "invalid filename: file must not contain / (filename=%v)", fileName)
 	}
 	if fileName == "" {
 		fileName = generateFileName(ng.engine, ng.plugin)

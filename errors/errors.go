@@ -14,6 +14,15 @@ type listErrors struct {
 }
 
 func Errors(msg string, errs []error) error {
+	ftErrs := make([]error, 0, len(errs))
+	for _, err := range errs {
+		if err != nil {
+			ftErrs = append(ftErrs, err)
+		}
+	}
+	if len(ftErrs) == 0 {
+		return nil
+	}
 	return listErrors{Msg: msg, Errors: errs}
 }
 
