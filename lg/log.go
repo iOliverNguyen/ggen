@@ -16,6 +16,7 @@ import (
 	"log"
 	"os"
 	"strconv"
+	"sync"
 )
 
 type Logger interface {
@@ -26,34 +27,90 @@ type Logger interface {
 	// V returns a VerbosedLogger, which only outputs log when the current verbosity level is equal or higher than the
 	// log line verbosity.
 	V(verbosity int) VerbosedLogger
+
+	// GetV returns the current verbosity.
+	GetV() int
+
+	// SetV sets a new verbosity, and return the last verbosity. The new verbosity must be equal or larger than the
+	// current verbosity.
+	SetV(verbosity int) int
 }
 
 type VerbosedLogger interface {
+	Print(args ...interface{})
 	Printf(format string, args ...interface{})
+	Println(args ...interface{})
 }
 
-var New func() Logger
+var _ Logger = logger(0)
+var _ VerbosedLogger = logger(0)
 
+var New func() Logger
 var verbosity int
+var lock sync.RWMutex
 
 func init() {
+	lock.Lock()
+	defer lock.Unlock()
+
 	New = newLogger
 	verbosity, _ = strconv.Atoi(os.Getenv("GGEN_LOGGING"))
 }
 
 type logger int
 
+func (_ logger) Verbosed(v int) bool {
+	lock.RLock()
+	defer lock.RUnlock()
+	return v <= verbosity
+}
+
 func (l logger) V(verbosity int) VerbosedLogger {
 	return logger(verbosity)
 }
 
-func (_ logger) Verbosed(v int) bool {
-	return v <= verbosity
+func (_ logger) GetV() int {
+	lock.RLock()
+	defer lock.RUnlock()
+
+	return verbosity
+}
+
+func (_ logger) SetV(v int) (last int) {
+	lock.Lock()
+	defer lock.Unlock()
+
+	last, verbosity = verbosity, v
+	return last
 }
 
 func (l logger) Printf(format string, args ...interface{}) {
-	if int(l) <= verbosity {
+	lock.RLock()
+	ok := int(l) <= verbosity
+	lock.RUnlock()
+
+	if ok {
 		log.Printf(format, args...)
+	}
+}
+
+func (l logger) Print(args ...interface{}) {
+	lock.RLock()
+	ok := int(l) <= verbosity
+	lock.RUnlock()
+
+	if ok {
+		log.Print(args...)
+	}
+}
+
+func (l logger) Println(args ...interface{}) {
+	lock.RLock()
+	ok := int(l) <= verbosity
+	lock.RUnlock()
+
+	if ok {
+		log.Println(args...)
 	}
 }
 

@@ -23,7 +23,7 @@ func Errors(msg string, errs []error) error {
 	if len(ftErrs) == 0 {
 		return nil
 	}
-	return listErrors{Msg: msg, Errors: errs}
+	return listErrors{Msg: msg, Errors: ftErrs}
 }
 
 func (es listErrors) Error() string {
@@ -83,6 +83,7 @@ type withMessage struct {
 
 func (w *withMessage) Error() string { return w.msg }
 func (w *withMessage) Cause() error  { return w.cause }
+func (w *withMessage) Unwrap() error { return w.cause }
 
 func (w *withMessage) Format(s fmt.State, verb rune) {
 	switch verb {
