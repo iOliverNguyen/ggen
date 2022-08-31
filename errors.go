@@ -1,6 +1,6 @@
 package ggen
 
-import "github.com/olvrng/ggen/errors"
+import "github.com/iolivern/ggen/errors"
 
 func Errorf(err error, format string, args ...interface{}) error {
 	return errors.Errorf(err, format, args...)

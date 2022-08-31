@@ -3,7 +3,7 @@ package ggen
 import (
 	"go/types"
 
-	"github.com/olvrng/ggen/errors"
+	"github.com/iolivern/ggen/errors"
 )
 
 type Filterer interface {

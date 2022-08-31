@@ -3,7 +3,7 @@ package ggutil
 import (
 	"go/types"
 
-	"github.com/olvrng/ggen"
+	"github.com/iolivern/ggen"
 )
 
 var _ ggen.Qualifier = &Qualifier{}

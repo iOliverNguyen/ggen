@@ -12,9 +12,9 @@ import (
 
 	"golang.org/x/tools/go/packages"
 
-	_ "github.com/olvrng/ggen/builtin"
-	"github.com/olvrng/ggen/errors"
-	"github.com/olvrng/ggen/lg"
+	_ "github.com/iolivern/ggen/builtin"
+	"github.com/iolivern/ggen/errors"
+	"github.com/iolivern/ggen/lg"
 )
 
 const defaultGeneratedFileNameTpl = "zz_generated.%v.go"
@@ -163,7 +163,7 @@ func ParseDirective(line string) (result []Directive, _ error) {
 	return result, nil
 }
 
-// TODO(olvrng): support new directive format //go:build
+// TODO(iOliverN): support new directive format //go:build
 // https://go.googlesource.com/proposal/+/master/design/draft-gobuild.md
 func parseBuildDirective(text string) ([]Directive, error) {
 	arg := strings.TrimSpace(strings.TrimPrefix(text, "+build"))

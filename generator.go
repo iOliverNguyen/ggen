@@ -14,7 +14,7 @@ import (
 
 	"golang.org/x/tools/go/packages"
 
-	"github.com/olvrng/ggen/errors"
+	"github.com/iolivern/ggen/errors"
 )
 
 type GenerateFileNameInput struct {

@@ -3,7 +3,7 @@
 ## Install
 
 ```
-go get github.com/olvrng/ggen/cmd/ggen
+go get github.com/iolivern/ggen/cmd/ggen
 ```
 
 ## Usage
@@ -36,4 +36,4 @@ type Plugin interface {
 
 ## LICENSE
 
-[MIT](https://github.com/olvrng/ggen/blob/master/LICENSE)
+[MIT](https://github.com/iolivern/ggen/blob/master/LICENSE)

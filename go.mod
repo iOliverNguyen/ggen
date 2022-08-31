@@ -1,4 +1,4 @@
-module github.com/olvrng/ggen
+module github.com/iolivern/ggen
 
 go 1.12
 

@@ -3,7 +3,7 @@ package sample
 import (
 	"fmt"
 
-	"github.com/olvrng/ggen"
+	"github.com/iolivern/ggen"
 )
 
 func New() ggen.Plugin {
