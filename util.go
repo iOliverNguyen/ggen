@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"go/ast"
 	"go/types"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -139,7 +139,7 @@ func processDocText(doc *ast.CommentGroup) string {
 
 // ParseDirectiveFromFile reads from file and returns the parsed directives.
 func ParseDirectiveFromFile(filename string) (directives, inlineDirective []Directive, err error) {
-	body, err := ioutil.ReadFile(filename)
+	body, err := os.ReadFile(filename)
 	if err != nil {
 		return
 	}
@@ -156,24 +156,20 @@ func ParseDirectiveFromBody(body []byte) (directives, inlineDirective []Directiv
 // ParseDirective parses directives from a single line.
 func ParseDirective(line string) (result []Directive, _ error) {
 	line = strings.TrimSpace(strings.TrimPrefix(line, "//"))
-	if line == "+build" || strings.HasPrefix(line, "+build ") ||
-		line == "go:build" || strings.HasPrefix(line, "go:build ") {
+	if line == "go:build" || strings.HasPrefix(line, "go:build ") {
 		return parseBuildDirective(line)
 	}
-	result, err := parseDirective(line, result)
+
+	parser := &directiveParser{}
+	result, err := parser.parseDirective(line)
 	if err != nil {
 		return nil, ggutil.Errorf(err, "%v (%v)", err, line)
 	}
 	return result, nil
 }
 
-// TODO(iOliverN): support new directive format //go:build
-// https://go.googlesource.com/proposal/+/master/design/draft-gobuild.md
 func parseBuildDirective(text string) ([]Directive, error) {
-	arg := strings.TrimPrefix(text, "+build")
-	if arg == text {
-		arg = strings.TrimPrefix(text, "go:build")
-	}
+	arg := strings.TrimPrefix(text, "go:build")
 	arg = strings.TrimSpace(arg)
 	directive := Directive{
 		Raw: text,
@@ -183,7 +179,18 @@ func parseBuildDirective(text string) ([]Directive, error) {
 	return []Directive{directive}, nil
 }
 
-func parseDirective(text string, result []Directive) ([]Directive, error) {
+type directiveParser struct {
+	result []Directive
+}
+
+func (p *directiveParser) append(directives ...Directive) []Directive {
+	p.result = append(p.result, directives...)
+	return p.result
+}
+
+func (p *directiveParser) parseDirective(text string) (result []Directive, _ error) {
+	defer p.append(result...)
+
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return nil, nil
@@ -205,12 +212,12 @@ func parseDirective(text string, result []Directive) ([]Directive, error) {
 	remain := text[len(dtext):]
 	if remain == "" {
 		directive.Raw = dtext
-		return append(result, directive), nil
+		return p.append(directive), nil
 	}
 	if remain[0] == ' ' || remain[0] == '\t' {
 		directive.Raw = dtext
-		result = append(result, directive)
-		return parseDirective(remain, result)
+		p.append(directive)
+		return p.parseDirective(remain)
 	}
 	if remain[0] == ':' {
 		remain = remain[1:] // remove ":"
@@ -219,7 +226,8 @@ func parseDirective(text string, result []Directive) ([]Directive, error) {
 		if directive.Arg == "" {
 			return nil, ggutil.Errorf(nil, "invalid directive")
 		}
-		return append(result, directive), nil
+		p.append(directive)
+		return p.result, nil
 	}
 	if remain[0] == '=' {
 		remain = remain[1:] // remove "="
@@ -230,15 +238,16 @@ func parseDirective(text string, result []Directive) ([]Directive, error) {
 			if directive.Arg == "" {
 				return nil, ggutil.Errorf(nil, "invalid directive")
 			}
-			return append(result, directive), nil
+			p.append(directive)
+			return p.result, nil
 		}
 		directive.Raw = text[:idx]
 		directive.Arg = strings.TrimSpace(text[len(dtext)+1 : idx])
 		if directive.Arg == "" {
 			return nil, ggutil.Errorf(nil, "invalid directive")
 		}
-		result = append(result, directive)
-		return parseDirective(text[idx:], result)
+		p.append(directive)
+		return p.parseDirective(text[idx:])
 	}
 	if strings.HasPrefix(remain, "_") {
 		return nil, ggutil.Errorf(nil, "invalid directive (directive commands should contain -, not _)")
