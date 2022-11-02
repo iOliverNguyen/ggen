@@ -1,119 +1,125 @@
-// lg implements a simple verbosity logger interface.
+// Package lg implements a simple verbosity logger interface. This follows the design of golang.org/x/exp/slog.
 //
 // The default verbosity is 0, and can be changed by setting the environment variable GGEN_LOGGING. For example:
 //
-//     GGEN_LOGGING=1          : set the current verbosity to 1
+//     GGEN_LOGGING=0          : set the current verbosity to 0 (default)
 //
-//     logger.V(0).Printf(...) : print log, since V(0) >  GGEN_LOGGING
-//     logger.V(1).Printf(...) : print log, since V(1) == GGEN_LOGGING
-//     logger.V(2).Printf(...) : not print, since V(2) >  GGEN_LOGGING
+//     lg.Debug("hello")       : will not be printed
+//     lg.Info("hello")        : will print "hello"
 //
 // User of ggen package can replace the default logger with their own implementation by implementing the Logger
 // interface.
 package lg
 
 import (
-	"log"
+	"fmt"
 	"os"
 	"strconv"
 	"sync"
+
+	"golang.org/x/exp/slog"
 )
 
+const EnvLogging = "GGEN_LOGGING"
+
+type Level = slog.Level
+
+var _ Logger = slog.Logger{}
+
+// Type Logger exposes the logging interface from golang.org/x/exp/slog. User of ggen package can replace the default
+// logger with their own implementation by implementing the Logger interface.
 type Logger interface {
 
-	// Verbosed checks if the current verbosity level is equal or higher than the param.
-	Verbosed(verbosity int) bool
+	// Enabled reports whether logger emits log records at the given level.
+	Enabled(level Level) bool
 
-	// V returns a VerbosedLogger, which only outputs log when the current verbosity level is equal or higher than the
-	// log line verbosity.
-	V(verbosity int) VerbosedLogger
+	// Log emits a log record with the current time and the given level and message.
+	Log(level Level, msg string, args ...any)
 
-	// GetV returns the current verbosity.
-	GetV() int
+	// Debug calls Logger.Debug on the default logger.
+	Debug(msg string, args ...any)
 
-	// SetV sets a new verbosity, and return the last verbosity. The new verbosity must be equal or larger than the
-	// current verbosity.
-	SetV(verbosity int) int
+	// Warn logs at InfoLevel.
+	Info(msg string, args ...any)
+
+	// Warn logs at WarnLevel.
+	Warn(msg string, args ...any)
+
+	// Error logs at ErrorLevel. If err is non-nil, Error appends Any("err", err) to the list of attributes.
+	Error(msg string, err error, args ...any)
 }
 
-type VerbosedLogger interface {
-	Print(args ...interface{})
-	Printf(format string, args ...interface{})
-	Println(args ...interface{})
-}
-
-var _ Logger = logger(0)
-var _ VerbosedLogger = logger(0)
-
-var New func() Logger
-var verbosity int
+var defaultLogger Logger
 var lock sync.RWMutex
 
-func init() {
-	lock.Lock()
-	defer lock.Unlock()
-
-	New = newLogger
-	verbosity, _ = strconv.Atoi(os.Getenv("GGEN_LOGGING"))
-}
-
-type logger int
-
-func (_ logger) Verbosed(v int) bool {
-	lock.RLock()
-	defer lock.RUnlock()
-	return v <= verbosity
-}
-
-func (l logger) V(verbosity int) VerbosedLogger {
-	return logger(verbosity)
-}
-
-func (_ logger) GetV() int {
+// L return the default logger. It can be overwritten by SetLogger().
+func L() Logger {
 	lock.RLock()
 	defer lock.RUnlock()
 
-	return verbosity
+	if defaultLogger == nil {
+		defaultLogger = newDefaultLogger()
+	}
+	return defaultLogger
 }
 
-func (_ logger) SetV(v int) (last int) {
+// Enabled calls Logger.Enabled on the default logger.
+func Enabled(level Level) bool {
+	return L().Enabled(level)
+}
+
+// Log calls Logger.Log on the default logger.
+func Log(level Level, msg string, args ...any) {
+	L().Log(level, msg, args...)
+}
+
+// Debug calls Logger.Debug on the default logger.
+func Debug(msg string, args ...any) {
+	L().Debug(msg, args...)
+}
+
+// Info calls Logger.Info on the default logger.
+func Info(msg string, args ...any) {
+	L().Info(msg, args...)
+}
+
+// Warn calls Logger.Warn on the default logger.
+func Warn(msg string, args ...any) {
+	L().Warn(msg, args...)
+}
+
+// Error calls Logger.Error on the default logger.
+func Error(msg string, err error, args ...any) {
+	L().Error(msg, err, args...)
+}
+
+// SetLogger is used to overwrite the default logger with a custom implementation. It must be called before any log is
+// created.
+func SetLogger(logger Logger) {
 	lock.Lock()
 	defer lock.Unlock()
 
-	last, verbosity = verbosity, v
-	return last
-}
-
-func (l logger) Printf(format string, args ...interface{}) {
-	lock.RLock()
-	ok := int(l) <= verbosity
-	lock.RUnlock()
-
-	if ok {
-		log.Printf(format, args...)
+	if defaultLogger != nil {
+		panic("logger is already set")
 	}
+	defaultLogger = logger
 }
 
-func (l logger) Print(args ...interface{}) {
-	lock.RLock()
-	ok := int(l) <= verbosity
-	lock.RUnlock()
-
-	if ok {
-		log.Print(args...)
+func newDefaultLogger() Logger {
+	verbosity := 0
+	loggingEnv := os.Getenv(EnvLogging)
+	if loggingEnv != "" {
+		v, err := strconv.Atoi(loggingEnv)
+		if err != nil {
+			msg := fmt.Sprintf("failed to parse %s environment variable, default to 0", EnvLogging)
+			slog.Log(slog.ErrorLevel, msg)
+		}
+		verbosity = v
 	}
-}
 
-func (l logger) Println(args ...interface{}) {
-	lock.RLock()
-	ok := int(l) <= verbosity
-	lock.RUnlock()
-
-	if ok {
-		log.Println(args...)
+	opts := slog.HandlerOptions{
+		Level: slog.Level(verbosity),
 	}
-}
-
-func newLogger() Logger {
-	return logger(0)
+	handler := opts.NewTextHandler(os.Stderr)
+	return slog.New(handler)
 }

@@ -12,9 +12,11 @@ import (
 	"strings"
 	"sync"
 
+	"golang.org/x/exp/slog"
 	"golang.org/x/tools/go/packages"
 
-	"github.com/iolivern/ggen/errors"
+	"github.com/iolivern/ggen/ggutil"
+	"github.com/iolivern/ggen/lg"
 )
 
 type GenerateFileNameInput struct {
@@ -43,10 +45,10 @@ func Start(cfg Config, patterns ...string) error {
 func (ng *engine) start(cfg Config, patterns ...string) (_err error) {
 	{
 		if len(patterns) == 0 {
-			return errors.Errorf(nil, "no patterns")
+			return ggutil.Errorf(nil, "no patterns")
 		}
 		if len(ng.plugins) == 0 {
-			return errors.Errorf(nil, "no registed plugins")
+			return ggutil.Errorf(nil, "no registed plugins")
 		}
 		if err := ng.validateConfig(&cfg); err != nil {
 			return err
@@ -63,7 +65,7 @@ func (ng *engine) start(cfg Config, patterns ...string) (_err error) {
 		}
 		pkgs, err := packages.Load(&ng.pkgcfg, patterns...)
 		if err != nil {
-			return errors.Errorf(err, "can not load package: %v", err)
+			return ggutil.Errorf(err, "can not load package: %v", err)
 		}
 
 		// populate cleanedFileNames
@@ -79,7 +81,7 @@ func (ng *engine) start(cfg Config, patterns ...string) (_err error) {
 		for _, pkg := range pkgs {
 			pkgDir := getPackageDir(pkg)
 			if pkgDir == "" {
-				ll.V(1).Printf("no Go files found in package: %v", pkg)
+				lg.Info("no Go files found in package", "pkg", pkg)
 				continue
 			}
 			availablePkgs = append(availablePkgs, pkg)
@@ -97,9 +99,9 @@ func (ng *engine) start(cfg Config, patterns ...string) (_err error) {
 			return err
 		}
 
-		if ll.Verbosed(4) {
+		if lg.Enabled(slog.DebugLevel) {
 			for _, pkg := range ng.collectedPackages {
-				ll.V(4).Printf("collected package: %v", pkg.PkgPath)
+				lg.Debug("collected package", "pkg", pkg.PkgPath)
 			}
 		}
 	}
@@ -119,10 +121,10 @@ func (ng *engine) start(cfg Config, patterns ...string) (_err error) {
 		for _, pkg := range ng.sortedIncludedPackages {
 			pkgPatterns = append(pkgPatterns, pkg.PkgPath)
 		}
-		if ll.Verbosed(3) {
-			ll.V(3).Printf("load all syntax from:")
+		if lg.Enabled(slog.DebugLevel) {
+			lg.Debug("load all syntax from:")
 			for _, p := range pkgPatterns {
-				ll.V(3).Printf(p)
+				lg.Debug(p)
 			}
 		}
 		if len(pkgPatterns) == 0 {
@@ -138,7 +140,7 @@ func (ng *engine) start(cfg Config, patterns ...string) (_err error) {
 		}
 		pkgs, err := packages.Load(&ng.pkgcfg, pkgPatterns...)
 		if err != nil {
-			return errors.Errorf(err, "can not load package: %v", err)
+			return ggutil.Errorf(err, "can not load package: %v", err)
 		}
 
 		// populate xinfo
@@ -174,7 +176,7 @@ func (ng *engine) start(cfg Config, patterns ...string) (_err error) {
 		for _, pl := range ng.enabledPlugins {
 			wrapNg := &wrapEngine{engine: ng, plugin: pl}
 			if err := pl.plugin.Generate(wrapNg); err != nil {
-				return errors.Errorf(err, "%v: %v", pl.name, err)
+				return ggutil.Errorf(err, "%v: %v", pl.name, err)
 			}
 			for _, gpkg := range wrapNg.pkgs {
 				prt := gpkg.printer
@@ -223,7 +225,7 @@ func (ng *engine) collectPackages(pkgs []*packages.Package) error {
 			patterns: &ng.includedPatterns,
 		}
 		if err = pl.plugin.Filter(filterNg); err != nil {
-			return errors.Errorf(err, "plugin %v: %v", pl.name, err)
+			return ggutil.Errorf(err, "plugin %v: %v", pl.name, err)
 		}
 	}
 	ng.collectedPackages = collectedPackages
@@ -289,7 +291,7 @@ func collectPackages(
 			defer func() { wg.Done(); <-limit }() // release limit
 			directives, inlineDirectives, err := parseDirectivesFromPackage(fileCh, pkg, cleanedFileNames)
 			if err != nil {
-				_err = errors.Errorf(err, "parsing %v: %v", pkg.PkgPath, err)
+				_err = ggutil.Errorf(err, "parsing %v: %v", pkg.PkgPath, err)
 			}
 			p := filteringPackage{
 				PkgPath:          pkg.PkgPath,
@@ -305,7 +307,7 @@ func collectPackages(
 	close(errCh)
 	wg0.Wait()
 	if len(errs) != 0 {
-		_err = errors.Errors("can not parse packages", errs)
+		_err = ggutil.Errors("can not parse packages", errs)
 	}
 	return
 }
@@ -324,7 +326,7 @@ func cleanDir(cleanedFileNames map[string]bool, pkgDir string) error {
 		if cleanedFileNames[name] {
 			absFileName := filepath.Join(pkgDir, name)
 			if err = os.Remove(absFileName); err != nil {
-				return errors.Errorf(err, "can not remove file %v: %v", absFileName, err)
+				return ggutil.Errorf(err, "can not remove file %v: %v", absFileName, err)
 			}
 		}
 	}
@@ -345,10 +347,8 @@ func parseDirectivesFromPackage(fileCh chan<- fileContent, pkg *packages.Package
 		errs := parseDirectivesFromBody(body, &directives, &inlineDirectives)
 		if len(errs) != 0 {
 			// ignore unknown directives
-			if ll.Verbosed(2) {
-				for _, e := range errs {
-					ll.V(1).Printf("ignored %v", e)
-				}
+			for _, e := range errs {
+				lg.Error("ignored", e)
 			}
 		}
 	}
@@ -407,7 +407,7 @@ func parseDirectivesFromBody(body []byte, directives, inlineDirectives *[]Direct
 func (ng *engine) validateConfig(cfg *Config) (_err error) {
 	defer func() {
 		if _err != nil {
-			_err = errors.Errorf(_err, "config error: %v", _err)
+			_err = ggutil.Errorf(_err, "config error: %v", _err)
 		}
 	}()
 
@@ -416,7 +416,7 @@ func (ng *engine) validateConfig(cfg *Config) (_err error) {
 		for _, enabled := range cfg.EnabledPlugins {
 			pl := ng.pluginsMap[enabled]
 			if pl == nil {
-				return errors.Errorf(nil, "plugin %v not found", enabled)
+				return ggutil.Errorf(nil, "plugin %v not found", enabled)
 			}
 			pl.enabled = true
 			ng.enabledPlugins = append(ng.enabledPlugins, pl)
@@ -459,10 +459,10 @@ func (ng *engine) execGoimport(files []string) error {
 	args = append(args, "-w")
 	args = append(args, files...)
 	cmd := exec.Command("goimports", args...)
-	ll.V(4).Printf("goimports %v", args)
+	lg.Debug("goimports", "args", args)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return errors.Errorf(err, "goimports: %s\n\n%s\n", err, out)
+		return ggutil.Errorf(err, "goimports: %s\n\n%s\n", err, out)
 	}
 	return nil
 }

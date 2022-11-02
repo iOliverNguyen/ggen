@@ -3,7 +3,7 @@ package ggen
 import (
 	"go/types"
 
-	"github.com/iolivern/ggen/errors"
+	"github.com/iolivern/ggen/ggutil"
 )
 
 type Filterer interface {
@@ -43,7 +43,7 @@ type pluginStruct struct {
 func RegisterPlugin(plugins ...Plugin) error {
 	for _, plugin := range plugins {
 		if err := theEngine.registerPlugin(plugin); err != nil {
-			return errors.Errorf(err, "register plugin %v: %v", plugin.Name(), err)
+			return ggutil.Errorf(err, "register plugin %v: %v", plugin.Name(), err)
 		}
 	}
 	return nil
@@ -52,13 +52,13 @@ func RegisterPlugin(plugins ...Plugin) error {
 func (ng *engine) registerPlugin(plugin Plugin) error {
 	name := plugin.Name()
 	if name == "" {
-		return errors.Errorf(nil, "empty name")
+		return ggutil.Errorf(nil, "empty name")
 	}
 	if plugin == nil {
-		return errors.Errorf(nil, "nil plugin")
+		return ggutil.Errorf(nil, "nil plugin")
 	}
 	if ng.pluginsMap[name] != nil {
-		return errors.Errorf(nil, "duplicated pluginStruct name: %v", name)
+		return ggutil.Errorf(nil, "duplicated pluginStruct name: %v", name)
 	}
 
 	pl := &pluginStruct{name: name, plugin: plugin, index: len(ng.plugins)}

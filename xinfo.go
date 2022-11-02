@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"golang.org/x/tools/go/packages"
+
+	"github.com/iolivern/ggen/lg"
 )
 
 type Comment struct {
@@ -128,7 +130,7 @@ func (x *extendedInfo) addFile(pkg *packages.Package, file *ast.File) error {
 		}
 		comment, err := processDoc(doc, cmt)
 		if err != nil {
-			ll.V(3).Printf("error while processing doc: %v", err)
+			lg.Error("error while processing doc", err)
 		}
 		return &declaration{
 			Pkg:     pkg,

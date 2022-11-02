@@ -2,11 +2,7 @@ package ggutil
 
 import (
 	"go/types"
-
-	"github.com/iolivern/ggen"
 )
-
-var _ ggen.Qualifier = &Qualifier{}
 
 type Qualifier struct{}
 
