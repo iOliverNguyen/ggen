@@ -48,6 +48,10 @@ type Logger interface {
 
 	// Error logs at ErrorLevel. If err is non-nil, Error appends Any("err", err) to the list of attributes.
 	Error(msg string, err error, args ...any)
+
+	// WithGroup returns a new Logger that starts a group. The keys of all attributes added to the Logger will be
+	// qualified by the given name.
+	WithGroup(name string) slog.Logger
 }
 
 var defaultLogger Logger
@@ -122,7 +126,11 @@ func (h DefaultHandler) Enabled(level slog.Level) bool {
 }
 
 func (h DefaultHandler) Handle(r slog.Record) (err error) {
-	_, err = fmt.Fprintf(h.w, "%7s: %s", r.Level, r.Message)
+	if h.group != "" {
+		_, err = fmt.Fprintf(h.w, "%7s: [%s] %s", r.Level, h.group, r.Message)
+	} else {
+		_, err = fmt.Fprintf(h.w, "%7s: %s", r.Level, r.Message)
+	}
 	if err != nil {
 		return err
 	}

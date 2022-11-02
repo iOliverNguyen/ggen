@@ -49,6 +49,9 @@ func (g *GeneratingPackage) GetObjects() []types.Object {
 
 type Engine interface {
 
+	// Plugin should use the embedded logger to log messages.
+	gglog.Logger
+
 	// GenerateEachPackage loops through the list of GeneratingPackages and call the given function.
 	GenerateEachPackage(func(Engine, *packages.Package, Printer) error) error
 
@@ -102,6 +105,8 @@ type engine struct {
 }
 
 type wrapEngine struct {
+	gglog.Logger
+
 	*engine
 	plugin *pluginStruct
 	pkgs   []*GeneratingPackage
@@ -322,7 +327,7 @@ func (ng *wrapEngine) GetDirectivesByPackage(pkg *packages.Package) Directives {
 	directives, ok := ng.mapPkgDirectives[pkg.PkgPath]
 	if !ok {
 		for _, file := range pkg.GoFiles {
-			body, err := ioutil.ReadFile(file)
+			body, err := os.ReadFile(file)
 			if err != nil {
 				if os.IsNotExist(err) {
 					gglog.Error("ignore not found file", nil, "file", file)

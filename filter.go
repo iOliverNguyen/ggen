@@ -2,6 +2,8 @@ package ggen
 
 import (
 	"golang.org/x/tools/go/packages"
+
+	"github.com/iolivern/ggen/gglog"
 )
 
 type FilteringPackage struct {
@@ -30,6 +32,9 @@ type includedPackage struct {
 }
 
 type FilterEngine interface {
+
+	// Plugin should use the embedded logger to log messages.
+	gglog.Logger
 
 	// IncludePackage indicates that the given package will be included for generating. It will be returned later in
 	// Engine.GeneratingPackages(). If it does not exist, an error with be returned later.
@@ -71,6 +76,8 @@ type FilterEngine interface {
 var _ FilterEngine = &filterEngine{}
 
 type filterEngine struct {
+	gglog.Logger
+
 	ng       *engine
 	plugin   *pluginStruct
 	pkgs     []filteringPackage
@@ -106,8 +113,8 @@ func (ng *filterEngine) ParsePackage(pkgPath string) {
 
 // ParsePackages takes a pattern and add the matched packages to ParsingPackages. Pattern is the go package pattern:
 //
-//     example.com/...
-//     github.com/path/...
+//	example.com/...
+//	github.com/path/...
 //
 // A program may require many packages. So it's best to only include packages related to your work. For example if all
 // your packages are put under github.com/yourcompany, it's recommended to call

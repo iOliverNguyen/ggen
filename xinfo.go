@@ -130,7 +130,7 @@ func (x *extendedInfo) addFile(pkg *packages.Package, file *ast.File) error {
 		}
 		comment, err := processDoc(doc, cmt)
 		if err != nil {
-			gglog.Error("error while processing doc", err)
+			gglog.Debug("error while processing doc", "err", err)
 		}
 		return &declaration{
 			Pkg:     pkg,

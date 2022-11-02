@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -124,7 +123,7 @@ func (ng *engine) start(cfg Config, patterns ...string) (_err error) {
 		if gglog.Enabled(slog.DebugLevel) {
 			gglog.Debug("load all syntax from:")
 			for _, p := range pkgPatterns {
-				gglog.Debug(p)
+				gglog.Debug("  " + p)
 			}
 		}
 		if len(pkgPatterns) == 0 {
@@ -174,7 +173,11 @@ func (ng *engine) start(cfg Config, patterns ...string) (_err error) {
 	{
 		// populate generatedFiles
 		for _, pl := range ng.enabledPlugins {
-			wrapNg := &wrapEngine{engine: ng, plugin: pl}
+			wrapNg := &wrapEngine{
+				Logger: gglog.L().WithGroup("plugin=" + pl.name),
+				engine: ng,
+				plugin: pl,
+			}
 			if err := pl.plugin.Generate(wrapNg); err != nil {
 				return ggutil.Errorf(err, "%v: %v", pl.name, err)
 			}
@@ -218,6 +221,7 @@ func (ng *engine) collectPackages(pkgs []*packages.Package) error {
 	pkgMap := map[string][]bool{}
 	for _, pl := range ng.enabledPlugins {
 		filterNg := &filterEngine{
+			Logger:   gglog.L().WithGroup("plugin=" + pl.name),
 			ng:       ng,
 			plugin:   pl,
 			pkgs:     collectedPackages,
@@ -338,7 +342,7 @@ func parseDirectivesFromPackage(fileCh chan<- fileContent, pkg *packages.Package
 		if cleanedFileNames[filepath.Base(file)] {
 			continue
 		}
-		body, err := ioutil.ReadFile(file)
+		body, err := os.ReadFile(file)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -348,7 +352,7 @@ func parseDirectivesFromPackage(fileCh chan<- fileContent, pkg *packages.Package
 		if len(errs) != 0 {
 			// ignore unknown directives
 			for _, e := range errs {
-				gglog.Error("ignored", e)
+				gglog.Warn("ignored directive", "err", e)
 			}
 		}
 	}

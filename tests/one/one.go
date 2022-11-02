@@ -1,6 +1,5 @@
 package one
 
-// +gen
 // +gen:sample=10
 
 // this is comment of A

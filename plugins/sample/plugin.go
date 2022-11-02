@@ -1,8 +1,6 @@
 package sample
 
 import (
-	"fmt"
-
 	"github.com/iolivern/ggen"
 )
 
@@ -17,19 +15,22 @@ type plugin struct{}
 func (p plugin) Name() string    { return "sample" }
 func (p plugin) Command() string { return "sample" }
 
-func (p plugin) Filter(_ ggen.FilterEngine) error {
+func (p plugin) Filter(ft ggen.FilterEngine) error {
+	for _, pkg := range ft.ParsingPackages() {
+		ft.IncludePackage(pkg.PkgPath)
+		ft.Debug("include package", "pkg", pkg.PkgPath)
+	}
 	return nil
 }
 
 func (p plugin) Generate(ng ggen.Engine) error {
 	pkgs := ng.GeneratingPackages()
 	for _, gpkg := range pkgs {
-		fmt.Printf("package %v:\n", gpkg.Package.PkgPath)
+		ng.Debug("generate package", "pkg", gpkg.Package.PkgPath)
 		objects := gpkg.GetObjects()
 		for _, obj := range objects {
-			fmt.Printf("  %v\t%v\n", obj.Name(), obj.Type())
+			ng.Debug("  object", "name", obj.Name(), "type", obj.Type())
 		}
-		fmt.Println()
 	}
 	return nil
 }
