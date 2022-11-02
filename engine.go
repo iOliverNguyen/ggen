@@ -13,8 +13,8 @@ import (
 
 	"golang.org/x/tools/go/packages"
 
+	"github.com/iolivern/ggen/gglog"
 	"github.com/iolivern/ggen/ggutil"
-	"github.com/iolivern/ggen/lg"
 )
 
 type Positioner interface {
@@ -325,7 +325,7 @@ func (ng *wrapEngine) GetDirectivesByPackage(pkg *packages.Package) Directives {
 			body, err := ioutil.ReadFile(file)
 			if err != nil {
 				if os.IsNotExist(err) {
-					lg.Error("ignore not found file", nil, "file", file)
+					gglog.Error("ignore not found file", nil, "file", file)
 					continue
 				}
 				panic(err)
@@ -333,7 +333,7 @@ func (ng *wrapEngine) GetDirectivesByPackage(pkg *packages.Package) Directives {
 
 			errs := parseDirectivesFromBody(body, &directives, nil)
 			for _, err = range errs {
-				lg.Error("invalid directive from file", err, "file", file)
+				gglog.Error("invalid directive from file", err, "file", file)
 			}
 		}
 		ng.mapPkgDirectives[pkg.PkgPath] = directives

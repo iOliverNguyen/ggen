@@ -2,17 +2,18 @@
 //
 // The default verbosity is 0, and can be changed by setting the environment variable GGEN_LOGGING. For example:
 //
-//     GGEN_LOGGING=0          : set the current verbosity to 0 (default)
+//	GGEN_LOGGING=0          : set the current verbosity to 0 (default)
 //
-//     lg.Debug("hello")       : will not be printed
-//     lg.Info("hello")        : will print "hello"
+//	gglog.Debug("hello")       : will not be printed
+//	gglog.Info("hello")        : will print "hello"
 //
 // User of ggen package can replace the default logger with their own implementation by implementing the Logger
 // interface.
-package lg
+package gglog
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 	"sync"
@@ -105,6 +106,41 @@ func SetLogger(logger Logger) {
 	defaultLogger = logger
 }
 
+type DefaultHandler struct {
+	w     io.Writer
+	level Level
+	group string
+	attrs []slog.Attr
+}
+
+func NewDefaultHandler(w io.Writer, level Level) slog.Handler {
+	return &DefaultHandler{w: w, level: level}
+}
+
+func (h DefaultHandler) Enabled(level slog.Level) bool {
+	return level >= h.level
+}
+
+func (h DefaultHandler) Handle(r slog.Record) (err error) {
+	_, err = fmt.Fprintf(h.w, "%7s: %s", r.Level, r.Message)
+	if err != nil {
+		return err
+	}
+	r.Attrs(func(attr slog.Attr) {
+		_, _ = fmt.Fprintf(h.w, " %s=%q", attr.Key, attr.Value)
+	})
+	_, err = fmt.Fprintln(h.w)
+	return err
+}
+
+func (h DefaultHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return &DefaultHandler{w: h.w, level: h.level, attrs: attrs, group: h.group}
+}
+
+func (h DefaultHandler) WithGroup(name string) slog.Handler {
+	return &DefaultHandler{w: h.w, level: h.level, attrs: h.attrs, group: name}
+}
+
 func newDefaultLogger() Logger {
 	verbosity := 0
 	loggingEnv := os.Getenv(EnvLogging)
@@ -117,9 +153,6 @@ func newDefaultLogger() Logger {
 		verbosity = v
 	}
 
-	opts := slog.HandlerOptions{
-		Level: slog.Level(verbosity),
-	}
-	handler := opts.NewTextHandler(os.Stderr)
+	handler := NewDefaultHandler(os.Stderr, slog.Level(verbosity))
 	return slog.New(handler)
 }

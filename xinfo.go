@@ -8,7 +8,7 @@ import (
 
 	"golang.org/x/tools/go/packages"
 
-	"github.com/iolivern/ggen/lg"
+	"github.com/iolivern/ggen/gglog"
 )
 
 type Comment struct {
@@ -25,15 +25,15 @@ func (c Comment) Text() string {
 
 // Directive comment has one of following formats
 //
-//   // +foo:valid=required,optional
-//   // +foo:valid=null +gen=foo
-//   // +foo:pkg=sample,baz
-//   // +foo:valid: 0 < $ && $ <= 10
+//	// +foo:valid=required,optional
+//	// +foo:valid=null +gen=foo
+//	// +foo:pkg=sample,baz
+//	// +foo:valid: 0 < $ && $ <= 10
 //
 // For example "// +foo:pkg=sample,baz" will be parsed as
 //
-//   Command: "foo:pkg"
-//   Arg:     "sample,baz"
+//	Command: "foo:pkg"
+//	Arg:     "sample,baz"
 //
 // Directives must start at the begin of a line, after "//" and a space (the
 // same as "// +build"). Multiple directives can appear in one line.
@@ -130,7 +130,7 @@ func (x *extendedInfo) addFile(pkg *packages.Package, file *ast.File) error {
 		}
 		comment, err := processDoc(doc, cmt)
 		if err != nil {
-			lg.Error("error while processing doc", err)
+			gglog.Error("error while processing doc", err)
 		}
 		return &declaration{
 			Pkg:     pkg,

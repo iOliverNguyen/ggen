@@ -15,8 +15,8 @@ import (
 	"golang.org/x/exp/slog"
 	"golang.org/x/tools/go/packages"
 
+	"github.com/iolivern/ggen/gglog"
 	"github.com/iolivern/ggen/ggutil"
-	"github.com/iolivern/ggen/lg"
 )
 
 type GenerateFileNameInput struct {
@@ -81,7 +81,7 @@ func (ng *engine) start(cfg Config, patterns ...string) (_err error) {
 		for _, pkg := range pkgs {
 			pkgDir := getPackageDir(pkg)
 			if pkgDir == "" {
-				lg.Info("no Go files found in package", "pkg", pkg)
+				gglog.Info("no Go files found in package", "pkg", pkg)
 				continue
 			}
 			availablePkgs = append(availablePkgs, pkg)
@@ -99,9 +99,9 @@ func (ng *engine) start(cfg Config, patterns ...string) (_err error) {
 			return err
 		}
 
-		if lg.Enabled(slog.DebugLevel) {
+		if gglog.Enabled(slog.DebugLevel) {
 			for _, pkg := range ng.collectedPackages {
-				lg.Debug("collected package", "pkg", pkg.PkgPath)
+				gglog.Debug("collected package", "pkg", pkg.PkgPath)
 			}
 		}
 	}
@@ -121,10 +121,10 @@ func (ng *engine) start(cfg Config, patterns ...string) (_err error) {
 		for _, pkg := range ng.sortedIncludedPackages {
 			pkgPatterns = append(pkgPatterns, pkg.PkgPath)
 		}
-		if lg.Enabled(slog.DebugLevel) {
-			lg.Debug("load all syntax from:")
+		if gglog.Enabled(slog.DebugLevel) {
+			gglog.Debug("load all syntax from:")
 			for _, p := range pkgPatterns {
-				lg.Debug(p)
+				gglog.Debug(p)
 			}
 		}
 		if len(pkgPatterns) == 0 {
@@ -348,7 +348,7 @@ func parseDirectivesFromPackage(fileCh chan<- fileContent, pkg *packages.Package
 		if len(errs) != 0 {
 			// ignore unknown directives
 			for _, e := range errs {
-				lg.Error("ignored", e)
+				gglog.Error("ignored", e)
 			}
 		}
 	}
@@ -459,7 +459,7 @@ func (ng *engine) execGoimport(files []string) error {
 	args = append(args, "-w")
 	args = append(args, files...)
 	cmd := exec.Command("goimports", args...)
-	lg.Debug("goimports", "args", args)
+	gglog.Debug("goimports", "args", args)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return ggutil.Errorf(err, "goimports: %s\n\n%s\n", err, out)
