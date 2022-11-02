@@ -1,4 +1,4 @@
-package ggutil
+package ggen
 
 import (
 	"bytes"

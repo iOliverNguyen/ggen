@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/iolivern/ggen"
-	"github.com/iolivern/ggen/plugins/sample"
+	"github.com/iolivernguyen/ggen/ggen"
+	"github.com/iolivernguyen/ggen/plugins/sample"
 )
 
 var flClean = flag.Bool("clean", false, "clean generated files without generating new files")

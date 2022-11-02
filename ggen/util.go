@@ -12,8 +12,7 @@ import (
 
 	"golang.org/x/tools/go/packages"
 
-	_ "github.com/iolivern/ggen/builtin"
-	"github.com/iolivern/ggen/ggutil"
+	_ "github.com/iolivernguyen/ggen/builtin"
 )
 
 const defaultGeneratedFileNameTpl = "zz_generated.%v.go"
@@ -149,7 +148,7 @@ func ParseDirectiveFromFile(filename string) (directives, inlineDirective []Dire
 // ParseDirectiveFromBody reads directives from body and returns the parsed directives.
 func ParseDirectiveFromBody(body []byte) (directives, inlineDirective []Directive, err error) {
 	errs := parseDirectivesFromBody(body, &directives, &inlineDirective)
-	err = ggutil.Errors("can not parse directive", errs)
+	err = Errors("can not parse directive", errs)
 	return
 }
 
@@ -163,7 +162,7 @@ func ParseDirective(line string) (result []Directive, _ error) {
 	parser := &directiveParser{}
 	result, err := parser.parseDirective(line)
 	if err != nil {
-		return nil, ggutil.Errorf(err, "%v (%v)", err, line)
+		return nil, Errorf(err, "%v (%v)", err, line)
 	}
 	return result, nil
 }
@@ -196,14 +195,14 @@ func (p *directiveParser) parseDirective(text string) (result []Directive, _ err
 		return nil, nil
 	}
 	if text[0] != '+' {
-		return nil, ggutil.Errorf(nil, "invalid directive")
+		return nil, nil
 	}
 	cmdIdx := reCommand.FindStringIndex(text)
 	if cmdIdx == nil {
-		return nil, ggutil.Errorf(nil, "invalid directive")
+		return nil, Errorf(nil, "invalid directive")
 	}
 	if cmdIdx[0] != 1 {
-		return nil, ggutil.Errorf(nil, "invalid directive")
+		return nil, Errorf(nil, "invalid directive")
 	}
 	dtext := text[:cmdIdx[1]]
 	directive := Directive{
@@ -224,7 +223,7 @@ func (p *directiveParser) parseDirective(text string) (result []Directive, _ err
 		directive.Raw = text
 		directive.Arg = strings.TrimSpace(remain)
 		if directive.Arg == "" {
-			return nil, ggutil.Errorf(nil, "invalid directive")
+			return nil, Errorf(nil, "invalid directive")
 		}
 		p.append(directive)
 		return p.result, nil
@@ -236,7 +235,7 @@ func (p *directiveParser) parseDirective(text string) (result []Directive, _ err
 			directive.Raw = text
 			directive.Arg = strings.TrimSpace(remain)
 			if directive.Arg == "" {
-				return nil, ggutil.Errorf(nil, "invalid directive")
+				return nil, Errorf(nil, "invalid directive")
 			}
 			p.append(directive)
 			return p.result, nil
@@ -244,15 +243,15 @@ func (p *directiveParser) parseDirective(text string) (result []Directive, _ err
 		directive.Raw = text[:idx]
 		directive.Arg = strings.TrimSpace(text[len(dtext)+1 : idx])
 		if directive.Arg == "" {
-			return nil, ggutil.Errorf(nil, "invalid directive")
+			return nil, Errorf(nil, "invalid directive")
 		}
 		p.append(directive)
 		return p.parseDirective(text[idx:])
 	}
 	if strings.HasPrefix(remain, "_") {
-		return nil, ggutil.Errorf(nil, "invalid directive (directive commands should contain -, not _)")
+		return nil, Errorf(nil, "invalid directive (directive commands should contain -, not _)")
 	}
-	return nil, ggutil.Errorf(nil, "invalid directive")
+	return nil, Errorf(nil, "invalid directive")
 }
 
 func must(err error) {

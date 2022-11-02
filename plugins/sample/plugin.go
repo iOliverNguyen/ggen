@@ -1,7 +1,7 @@
 package sample
 
 import (
-	"github.com/iolivern/ggen"
+	"github.com/iolivernguyen/ggen/ggen"
 )
 
 func New() ggen.Plugin {

@@ -13,9 +13,6 @@ import (
 
 	"golang.org/x/exp/slog"
 	"golang.org/x/tools/go/packages"
-
-	"github.com/iolivern/ggen/gglog"
-	"github.com/iolivern/ggen/ggutil"
 )
 
 type GenerateFileNameInput struct {
@@ -44,10 +41,10 @@ func Start(cfg Config, patterns ...string) error {
 func (ng *engine) start(cfg Config, patterns ...string) (_err error) {
 	{
 		if len(patterns) == 0 {
-			return ggutil.Errorf(nil, "no patterns")
+			return Errorf(nil, "no patterns")
 		}
 		if len(ng.plugins) == 0 {
-			return ggutil.Errorf(nil, "no registed plugins")
+			return Errorf(nil, "no registed plugins")
 		}
 		if err := ng.validateConfig(&cfg); err != nil {
 			return err
@@ -64,7 +61,7 @@ func (ng *engine) start(cfg Config, patterns ...string) (_err error) {
 		}
 		pkgs, err := packages.Load(&ng.pkgcfg, patterns...)
 		if err != nil {
-			return ggutil.Errorf(err, "can not load package: %v", err)
+			return Errorf(err, "can not load package: %v", err)
 		}
 
 		// populate cleanedFileNames
@@ -80,7 +77,7 @@ func (ng *engine) start(cfg Config, patterns ...string) (_err error) {
 		for _, pkg := range pkgs {
 			pkgDir := getPackageDir(pkg)
 			if pkgDir == "" {
-				gglog.Info("no Go files found in package", "pkg", pkg)
+				Info("no Go files found in package", "pkg", pkg)
 				continue
 			}
 			availablePkgs = append(availablePkgs, pkg)
@@ -98,9 +95,9 @@ func (ng *engine) start(cfg Config, patterns ...string) (_err error) {
 			return err
 		}
 
-		if gglog.Enabled(slog.DebugLevel) {
+		if Enabled(slog.DebugLevel) {
 			for _, pkg := range ng.collectedPackages {
-				gglog.Debug("collected package", "pkg", pkg.PkgPath)
+				Debug("collected package", "pkg", pkg.PkgPath)
 			}
 		}
 	}
@@ -120,10 +117,10 @@ func (ng *engine) start(cfg Config, patterns ...string) (_err error) {
 		for _, pkg := range ng.sortedIncludedPackages {
 			pkgPatterns = append(pkgPatterns, pkg.PkgPath)
 		}
-		if gglog.Enabled(slog.DebugLevel) {
-			gglog.Debug("load all syntax from:")
+		if Enabled(slog.DebugLevel) {
+			Debug("load all syntax from:")
 			for _, p := range pkgPatterns {
-				gglog.Debug("  " + p)
+				Debug("  " + p)
 			}
 		}
 		if len(pkgPatterns) == 0 {
@@ -139,7 +136,7 @@ func (ng *engine) start(cfg Config, patterns ...string) (_err error) {
 		}
 		pkgs, err := packages.Load(&ng.pkgcfg, pkgPatterns...)
 		if err != nil {
-			return ggutil.Errorf(err, "can not load package: %v", err)
+			return Errorf(err, "can not load package: %v", err)
 		}
 
 		// populate xinfo
@@ -174,12 +171,12 @@ func (ng *engine) start(cfg Config, patterns ...string) (_err error) {
 		// populate generatedFiles
 		for _, pl := range ng.enabledPlugins {
 			wrapNg := &wrapEngine{
-				Logger: gglog.L().WithGroup("plugin=" + pl.name),
+				Logger: L().WithGroup("plugin=" + pl.name),
 				engine: ng,
 				plugin: pl,
 			}
 			if err := pl.plugin.Generate(wrapNg); err != nil {
-				return ggutil.Errorf(err, "%v: %v", pl.name, err)
+				return Errorf(err, "%v: %v", pl.name, err)
 			}
 			for _, gpkg := range wrapNg.pkgs {
 				prt := gpkg.printer
@@ -221,7 +218,7 @@ func (ng *engine) collectPackages(pkgs []*packages.Package) error {
 	pkgMap := map[string][]bool{}
 	for _, pl := range ng.enabledPlugins {
 		filterNg := &filterEngine{
-			Logger:   gglog.L().WithGroup("plugin=" + pl.name),
+			Logger:   L().WithGroup("plugin=" + pl.name),
 			ng:       ng,
 			plugin:   pl,
 			pkgs:     collectedPackages,
@@ -229,7 +226,7 @@ func (ng *engine) collectPackages(pkgs []*packages.Package) error {
 			patterns: &ng.includedPatterns,
 		}
 		if err = pl.plugin.Filter(filterNg); err != nil {
-			return ggutil.Errorf(err, "plugin %v: %v", pl.name, err)
+			return Errorf(err, "plugin %v: %v", pl.name, err)
 		}
 	}
 	ng.collectedPackages = collectedPackages
@@ -295,7 +292,7 @@ func collectPackages(
 			defer func() { wg.Done(); <-limit }() // release limit
 			directives, inlineDirectives, err := parseDirectivesFromPackage(fileCh, pkg, cleanedFileNames)
 			if err != nil {
-				_err = ggutil.Errorf(err, "parsing %v: %v", pkg.PkgPath, err)
+				_err = Errorf(err, "parsing %v: %v", pkg.PkgPath, err)
 			}
 			p := filteringPackage{
 				PkgPath:          pkg.PkgPath,
@@ -311,7 +308,7 @@ func collectPackages(
 	close(errCh)
 	wg0.Wait()
 	if len(errs) != 0 {
-		_err = ggutil.Errors("can not parse packages", errs)
+		_err = Errors("can not parse packages", errs)
 	}
 	return
 }
@@ -330,7 +327,7 @@ func cleanDir(cleanedFileNames map[string]bool, pkgDir string) error {
 		if cleanedFileNames[name] {
 			absFileName := filepath.Join(pkgDir, name)
 			if err = os.Remove(absFileName); err != nil {
-				return ggutil.Errorf(err, "can not remove file %v: %v", absFileName, err)
+				return Errorf(err, "can not remove file %v: %v", absFileName, err)
 			}
 		}
 	}
@@ -352,7 +349,7 @@ func parseDirectivesFromPackage(fileCh chan<- fileContent, pkg *packages.Package
 		if len(errs) != 0 {
 			// ignore unknown directives
 			for _, e := range errs {
-				gglog.Warn("ignored directive", "err", e)
+				Warn("ignored directive", "err", e)
 			}
 		}
 	}
@@ -411,7 +408,7 @@ func parseDirectivesFromBody(body []byte, directives, inlineDirectives *[]Direct
 func (ng *engine) validateConfig(cfg *Config) (_err error) {
 	defer func() {
 		if _err != nil {
-			_err = ggutil.Errorf(_err, "config error: %v", _err)
+			_err = Errorf(_err, "config error: %v", _err)
 		}
 	}()
 
@@ -420,7 +417,7 @@ func (ng *engine) validateConfig(cfg *Config) (_err error) {
 		for _, enabled := range cfg.EnabledPlugins {
 			pl := ng.pluginsMap[enabled]
 			if pl == nil {
-				return ggutil.Errorf(nil, "plugin %v not found", enabled)
+				return Errorf(nil, "plugin %v not found", enabled)
 			}
 			pl.enabled = true
 			ng.enabledPlugins = append(ng.enabledPlugins, pl)
@@ -463,10 +460,10 @@ func (ng *engine) execGoimport(files []string) error {
 	args = append(args, "-w")
 	args = append(args, files...)
 	cmd := exec.Command("goimports", args...)
-	gglog.Debug("goimports", "args", args)
+	Debug("goimports", "args", args)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return ggutil.Errorf(err, "goimports: %s\n\n%s\n", err, out)
+		return Errorf(err, "goimports: %s\n\n%s\n", err, out)
 	}
 	return nil
 }

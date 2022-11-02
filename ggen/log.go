@@ -9,7 +9,7 @@
 //
 // User of ggen package can replace the default logger with their own implementation by implementing the Logger
 // interface.
-package gglog
+package ggen
 
 import (
 	"fmt"

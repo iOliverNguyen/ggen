@@ -7,8 +7,6 @@ import (
 	"strings"
 
 	"golang.org/x/tools/go/packages"
-
-	"github.com/iolivern/ggen/gglog"
 )
 
 type Comment struct {
@@ -130,7 +128,7 @@ func (x *extendedInfo) addFile(pkg *packages.Package, file *ast.File) error {
 		}
 		comment, err := processDoc(doc, cmt)
 		if err != nil {
-			gglog.Debug("error while processing doc", "err", err)
+			Debug("error while processing doc", "err", err)
 		}
 		return &declaration{
 			Pkg:     pkg,

@@ -12,9 +12,6 @@ import (
 	"sync"
 
 	"golang.org/x/tools/go/packages"
-
-	"github.com/iolivern/ggen/gglog"
-	"github.com/iolivern/ggen/ggutil"
 )
 
 type Positioner interface {
@@ -50,7 +47,7 @@ func (g *GeneratingPackage) GetObjects() []types.Object {
 type Engine interface {
 
 	// Plugin should use the embedded logger to log messages.
-	gglog.Logger
+	Logger
 
 	// GenerateEachPackage loops through the list of GeneratingPackages and call the given function.
 	GenerateEachPackage(func(Engine, *packages.Package, Printer) error) error
@@ -105,7 +102,7 @@ type engine struct {
 }
 
 type wrapEngine struct {
-	gglog.Logger
+	Logger
 
 	*engine
 	plugin *pluginStruct
@@ -214,7 +211,7 @@ func (ng *wrapEngine) GenerateEachPackage(
 	for _, pkg := range ng.generatingPackages() {
 		prt := pkg.GetPrinter()
 		if err := fn(ng, pkg.Package, prt); err != nil {
-			return ggutil.Errorf(err, "generating package %v: %v", pkg.PkgPath, err)
+			return Errorf(err, "generating package %v: %v", pkg.PkgPath, err)
 		}
 		if len(prt.Bytes()) == 0 {
 			continue
@@ -267,7 +264,7 @@ func generateFileName(ng *engine, plugin *pluginStruct) string {
 
 func (ng *wrapEngine) GeneratePackage(pkg *packages.Package, fileName string) (Printer, error) {
 	if strings.Contains(fileName, "/") {
-		return nil, ggutil.Errorf(nil, "invalid filename: file must not contain / (filename=%v)", fileName)
+		return nil, Errorf(nil, "invalid filename: file must not contain / (filename=%v)", fileName)
 	}
 	if fileName == "" {
 		fileName = generateFileName(ng.engine, ng.plugin)
@@ -279,10 +276,10 @@ func (ng *wrapEngine) GeneratePackage(pkg *packages.Package, fileName string) (P
 
 func (ng *wrapEngine) GenerateFile(pkgName string, filePath string) (Printer, error) {
 	if pkgName == "" {
-		return nil, ggutil.Errorf(nil, "empty package name")
+		return nil, Errorf(nil, "empty package name")
 	}
 	if filePath == "" {
-		return nil, ggutil.Errorf(nil, "empty file path")
+		return nil, Errorf(nil, "empty file path")
 	}
 	if strings.HasSuffix(filePath, "/") {
 		fileName := generateFileName(ng.engine, ng.plugin)
@@ -292,15 +289,15 @@ func (ng *wrapEngine) GenerateFile(pkgName string, filePath string) (Printer, er
 		dir := filepath.Dir(filePath)
 		output, err := exec.Command("mkdir", "-p", dir).CombinedOutput()
 		if err != nil {
-			return nil, ggutil.Errorf(err, "create directory %v: %s (%v)", dir, output, err)
+			return nil, Errorf(err, "create directory %v: %s (%v)", dir, output, err)
 		}
 		file, err := os.Open(dir)
 		if err != nil {
-			return nil, ggutil.Errorf(err, "can not read dir %v: %v", dir, err)
+			return nil, Errorf(err, "can not read dir %v: %v", dir, err)
 		}
 		names, err := file.Readdirnames(-1)
 		if err != nil {
-			return nil, ggutil.Errorf(err, "can not read dir %v: %v", dir, err)
+			return nil, Errorf(err, "can not read dir %v: %v", dir, err)
 		}
 		found := false
 		for _, name := range names {
@@ -315,7 +312,7 @@ func (ng *wrapEngine) GenerateFile(pkgName string, filePath string) (Printer, er
 			docFile := filepath.Join(dir, "doc.go")
 			err = ioutil.WriteFile(docFile, []byte("package "+pkgName), 0644)
 			if err != nil {
-				return nil, ggutil.Errorf(err, "can not write file %v: %v", docFile, err)
+				return nil, Errorf(err, "can not write file %v: %v", docFile, err)
 			}
 		}
 	}
@@ -330,7 +327,7 @@ func (ng *wrapEngine) GetDirectivesByPackage(pkg *packages.Package) Directives {
 			body, err := os.ReadFile(file)
 			if err != nil {
 				if os.IsNotExist(err) {
-					gglog.Error("ignore not found file", nil, "file", file)
+					Error("ignore not found file", nil, "file", file)
 					continue
 				}
 				panic(err)
@@ -338,7 +335,7 @@ func (ng *wrapEngine) GetDirectivesByPackage(pkg *packages.Package) Directives {
 
 			errs := parseDirectivesFromBody(body, &directives, nil)
 			for _, err = range errs {
-				gglog.Error("invalid directive from file", err, "file", file)
+				Error("invalid directive from file", err, "file", file)
 			}
 		}
 		ng.mapPkgDirectives[pkg.PkgPath] = directives

@@ -2,8 +2,6 @@ package ggen
 
 import (
 	"golang.org/x/tools/go/packages"
-
-	"github.com/iolivern/ggen/gglog"
 )
 
 type FilteringPackage struct {
@@ -34,7 +32,7 @@ type includedPackage struct {
 type FilterEngine interface {
 
 	// Plugin should use the embedded logger to log messages.
-	gglog.Logger
+	Logger
 
 	// IncludePackage indicates that the given package will be included for generating. It will be returned later in
 	// Engine.GeneratingPackages(). If it does not exist, an error with be returned later.
@@ -76,7 +74,7 @@ type FilterEngine interface {
 var _ FilterEngine = &filterEngine{}
 
 type filterEngine struct {
-	gglog.Logger
+	Logger
 
 	ng       *engine
 	plugin   *pluginStruct

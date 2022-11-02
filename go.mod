@@ -1,4 +1,4 @@
-module github.com/iolivern/ggen
+module github.com/iolivernguyen/ggen
 
 go 1.19
 
