@@ -71,6 +71,8 @@ type Engine interface {
 	GetObjectsByScope(*types.Scope) []types.Object
 	GetPackage(Positioner) *packages.Package
 	GetPackageByPath(string) *packages.Package
+
+	PrintNode(node ast.Node) error
 }
 
 var _ Engine = &wrapEngine{}
@@ -336,6 +338,10 @@ func (ng *wrapEngine) GetDirectivesByPackage(pkg *packages.Package) Directives {
 		ng.mapPkgDirectives[pkg.PkgPath] = directives
 	}
 	return cloneDirectives(directives)
+}
+
+func (ng *wrapEngine) PrintNode(node ast.Node) error {
+	return ast.Print(ng.xinfo.Fset, node)
 }
 
 func cloneDirectives(directives []Directive) []Directive {

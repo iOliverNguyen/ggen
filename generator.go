@@ -356,13 +356,14 @@ func parseDirectivesFromPackage(fileCh chan<- fileContent, pkg *packages.Package
 }
 
 var startDirective = []byte(startDirectiveStr)
+var startDirective2 = []byte(startDirectiveStr2)
 
 func parseDirectivesFromBody(body []byte, directives, inlineDirectives *[]Directive) (errs []error) {
 
 	// store processing directives
 	var tmp []Directive
 	lastIdx := -1
-	if bytes.HasPrefix(body, startDirective) {
+	if bytes.HasPrefix(body, startDirective) || bytes.HasPrefix(body, startDirective2) {
 		lastIdx = 0
 	}
 	for idx := 0; idx < len(body); idx++ {
@@ -370,9 +371,9 @@ func parseDirectivesFromBody(body []byte, directives, inlineDirectives *[]Direct
 			continue
 		}
 
-		// process the last found directive, remove "// " but keep "+"
+		// process the last found directive
 		if lastIdx >= 0 {
-			line := body[lastIdx+len(startDirective)-1 : idx]
+			line := body[lastIdx:idx]
 			lastIdx = -1
 
 			ds, err := ParseDirective(string(line))

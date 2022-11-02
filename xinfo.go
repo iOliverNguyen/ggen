@@ -140,6 +140,10 @@ func (x *extendedInfo) addFile(pkg *packages.Package, file *ast.File) error {
 	positions := x.Positions
 	ast.Inspect(file, func(node ast.Node) bool {
 		switch node := node.(type) {
+		case *ast.Ident:
+			declarations[node] = &declaration{Pkg: pkg}
+			positions[node.NamePos] = node
+
 		case *ast.FuncDecl:
 			ident := node.Name
 			declarations[ident] = processDocFunc(node.Doc, nil, false)
@@ -152,6 +156,13 @@ func (x *extendedInfo) addFile(pkg *packages.Package, file *ast.File) error {
 				genDoc = node.Doc
 			} else {
 				genDoc = nil
+			}
+
+		case *ast.ImportSpec:
+			if node.Name != nil {
+				ident := node.Name
+				declarations[ident] = processDocFunc(node.Doc, node.Comment, true)
+				positions[ident.Pos()] = ident
 			}
 
 		case *ast.TypeSpec:

@@ -19,7 +19,8 @@ import (
 
 const defaultGeneratedFileNameTpl = "zz_generated.%v.go"
 const defaultBufSize = 1024 * 4
-const startDirectiveStr = "// +"
+const startDirectiveStr = "// +"   // +directive
+const startDirectiveStr2 = "//go:" // go:build generator
 
 var ll = lg.New()
 var reCommand = regexp.MustCompile(`[a-z]([a-z0-9.:-]*[a-z0-9])?`)
@@ -91,6 +92,10 @@ func getPackageDir(pkg *packages.Package) string {
 	return ""
 }
 
+func hasStartDirective(line string) bool {
+	return strings.HasPrefix(line, startDirectiveStr) || strings.HasPrefix(line, startDirectiveStr2)
+}
+
 // processDoc splits directive and text comment
 func processDoc(doc, cmt *ast.CommentGroup) (Comment, error) {
 	if doc == nil {
@@ -99,12 +104,12 @@ func processDoc(doc, cmt *ast.CommentGroup) (Comment, error) {
 
 	directives := make([]Directive, 0, 4)
 	for _, line := range doc.List {
-		if !strings.HasPrefix(line.Text, startDirectiveStr) {
+		if hasStartDirective(line.Text) {
 			continue
 		}
 
 		// remove "// " but keep "+"
-		text := line.Text[len(startDirectiveStr)-1:]
+		text := strings.TrimSpace(strings.TrimPrefix(line.Text, "//"))
 		_directives, err := ParseDirective(text)
 		if err != nil {
 			return Comment{}, err
@@ -126,7 +131,7 @@ func processDocText(doc *ast.CommentGroup) string {
 	}
 	processedDoc := make([]*ast.Comment, 0, len(doc.List))
 	for _, line := range doc.List {
-		if !strings.HasPrefix(line.Text, startDirectiveStr) {
+		if hasStartDirective(line.Text) {
 			processedDoc = append(processedDoc, line)
 			continue
 		}
@@ -152,8 +157,9 @@ func ParseDirectiveFromBody(body []byte) (directives, inlineDirective []Directiv
 
 // ParseDirective parses directives from a single line.
 func ParseDirective(line string) (result []Directive, _ error) {
-	line = strings.TrimSpace(line)
-	if line == "+build" || strings.HasPrefix(line, "+build ") {
+	line = strings.TrimSpace(strings.TrimPrefix(line, "//"))
+	if line == "+build" || strings.HasPrefix(line, "+build ") ||
+		line == "go:build" || strings.HasPrefix(line, "go:build ") {
 		return parseBuildDirective(line)
 	}
 	result, err := parseDirective(line, result)
@@ -166,7 +172,11 @@ func ParseDirective(line string) (result []Directive, _ error) {
 // TODO(iOliverN): support new directive format //go:build
 // https://go.googlesource.com/proposal/+/master/design/draft-gobuild.md
 func parseBuildDirective(text string) ([]Directive, error) {
-	arg := strings.TrimSpace(strings.TrimPrefix(text, "+build"))
+	arg := strings.TrimPrefix(text, "+build")
+	if arg == text {
+		arg = strings.TrimPrefix(text, "go:build")
+	}
+	arg = strings.TrimSpace(arg)
 	directive := Directive{
 		Raw: text,
 		Cmd: "build",
