@@ -11,40 +11,23 @@ import (
 	"strings"
 	"sync"
 
-	"golang.org/x/exp/slog"
 	"golang.org/x/tools/go/packages"
 )
 
-type GenerateFileNameInput struct {
-	PluginName string
-}
-
-type Config struct {
-	// default to "zz_generated.{{.Name}}.go"
-	GenerateFileName func(GenerateFileNameInput) string
-
-	EnabledPlugins []string
-
-	CleanOnly bool
-
-	Namespace string
-
-	GoimportsArgs []string
-
-	BuildTags []string
-}
-
-func Start(cfg Config, patterns ...string) error {
-	return theEngine.clone().start(cfg, patterns...)
-}
-
 func (ng *engine) start(cfg Config, patterns ...string) (_err error) {
+	{
+		for _, plugin := range cfg.Plugins {
+			if err := ng.registerPlugin(plugin); err != nil {
+				return err
+			}
+		}
+	}
 	{
 		if len(patterns) == 0 {
 			return Errorf(nil, "no patterns")
 		}
 		if len(ng.plugins) == 0 {
-			return Errorf(nil, "no registed plugins")
+			return Errorf(nil, "no registered plugins")
 		}
 		if err := ng.validateConfig(&cfg); err != nil {
 			return err
@@ -77,7 +60,7 @@ func (ng *engine) start(cfg Config, patterns ...string) (_err error) {
 		for _, pkg := range pkgs {
 			pkgDir := getPackageDir(pkg)
 			if pkgDir == "" {
-				Info("no Go files found in package", "pkg", pkg)
+				ng.logger.Info("no Go files found in package", "pkg", pkg)
 				continue
 			}
 			availablePkgs = append(availablePkgs, pkg)
@@ -95,9 +78,9 @@ func (ng *engine) start(cfg Config, patterns ...string) (_err error) {
 			return err
 		}
 
-		if Enabled(slog.DebugLevel) {
+		if ng.logger.Enabled(DebugLevel) {
 			for _, pkg := range ng.collectedPackages {
-				Debug("collected package", "pkg", pkg.PkgPath)
+				ng.logger.Debug("collected package", "pkg", pkg.PkgPath)
 			}
 		}
 	}
@@ -110,6 +93,12 @@ func (ng *engine) start(cfg Config, patterns ...string) (_err error) {
 			return sortedIncludedPackages[i].PkgPath < sortedIncludedPackages[j].PkgPath
 		})
 		ng.sortedIncludedPackages = sortedIncludedPackages
+
+		if ng.logger.Enabled(DebugLevel) {
+			for _, pkg := range sortedIncludedPackages {
+				ng.logger.Debug("included package", "pkg", pkg.PkgPath)
+			}
+		}
 	}
 	{
 		pkgPatterns := make([]string, 0, len(ng.includedPatterns)+len(ng.sortedIncludedPackages))
@@ -117,10 +106,10 @@ func (ng *engine) start(cfg Config, patterns ...string) (_err error) {
 		for _, pkg := range ng.sortedIncludedPackages {
 			pkgPatterns = append(pkgPatterns, pkg.PkgPath)
 		}
-		if Enabled(slog.DebugLevel) {
-			Debug("load all syntax from:")
+		if ng.logger.Enabled(DebugLevel) {
+			ng.logger.Debug("load all syntax from:")
 			for _, p := range pkgPatterns {
-				Debug("  " + p)
+				ng.logger.Debug("  " + p)
 			}
 		}
 		if len(pkgPatterns) == 0 {
@@ -171,9 +160,9 @@ func (ng *engine) start(cfg Config, patterns ...string) (_err error) {
 		// populate generatedFiles
 		for _, pl := range ng.enabledPlugins {
 			wrapNg := &wrapEngine{
-				Logger: L().WithGroup("plugin=" + pl.name),
-				engine: ng,
-				plugin: pl,
+				embededLogger: embededLogger{ng.logger.With("plugin", pl.name)},
+				engine:        ng,
+				plugin:        pl,
 			}
 			if err := pl.plugin.Generate(wrapNg); err != nil {
 				return Errorf(err, "%v: %v", pl.name, err)
@@ -208,7 +197,7 @@ func (ng *engine) start(cfg Config, patterns ...string) (_err error) {
 }
 
 func (ng *engine) collectPackages(pkgs []*packages.Package) error {
-	collectedPackages, fileContents, err := collectPackages(pkgs, ng.cleanedFileNames)
+	collectedPackages, fileContents, err := collectPackages(ng.logger, pkgs, ng.cleanedFileNames)
 	if err != nil {
 		return err
 	}
@@ -218,12 +207,12 @@ func (ng *engine) collectPackages(pkgs []*packages.Package) error {
 	pkgMap := map[string][]bool{}
 	for _, pl := range ng.enabledPlugins {
 		filterNg := &filterEngine{
-			Logger:   L().WithGroup("plugin=" + pl.name),
-			ng:       ng,
-			plugin:   pl,
-			pkgs:     collectedPackages,
-			pkgMap:   pkgMap,
-			patterns: &ng.includedPatterns,
+			embededLogger: embededLogger{ng.logger.With("plugin", pl.name)},
+			ng:            ng,
+			plugin:        pl,
+			pkgs:          collectedPackages,
+			pkgMap:        pkgMap,
+			patterns:      &ng.includedPatterns,
 		}
 		if err = pl.plugin.Filter(filterNg); err != nil {
 			return Errorf(err, "plugin %v: %v", pl.name, err)
@@ -245,7 +234,7 @@ func (ng *engine) collectPackages(pkgs []*packages.Package) error {
 }
 
 func getBuildFlags(buildTags []string) []string {
-	var buildFlags = "-tags generator"
+	var buildFlags = "-tags ggen"
 	if len(buildTags) > 0 {
 		buildFlags += "," + strings.Join(buildTags, ",")
 	}
@@ -257,10 +246,7 @@ type fileContent struct {
 	Body []byte
 }
 
-func collectPackages(
-	pkgs []*packages.Package,
-	cleanedFileNames map[string]bool,
-) (collectedPackages []filteringPackage, files []fileContent, _err error) {
+func collectPackages(logger Logger, pkgs []*packages.Package, cleanedFileNames map[string]bool) (collectedPackages []filteringPackage, files []fileContent, _err error) {
 
 	var wg0, wg sync.WaitGroup
 	wg0.Add(2)
@@ -290,7 +276,7 @@ func collectPackages(
 		wg.Add(1)
 		go func(i int, pkg *packages.Package) {
 			defer func() { wg.Done(); <-limit }() // release limit
-			directives, inlineDirectives, err := parseDirectivesFromPackage(fileCh, pkg, cleanedFileNames)
+			directives, inlineDirectives, err := parseDirectivesFromPackage(logger, fileCh, pkg, cleanedFileNames)
 			if err != nil {
 				_err = Errorf(err, "parsing %v: %v", pkg.PkgPath, err)
 			}
@@ -334,7 +320,7 @@ func cleanDir(cleanedFileNames map[string]bool, pkgDir string) error {
 	return nil
 }
 
-func parseDirectivesFromPackage(fileCh chan<- fileContent, pkg *packages.Package, cleanedFileNames map[string]bool) (directives, inlineDirectives []Directive, _err error) {
+func parseDirectivesFromPackage(logger Logger, fileCh chan<- fileContent, pkg *packages.Package, cleanedFileNames map[string]bool) (directives, inlineDirectives []Directive, _err error) {
 	for _, file := range pkg.CompiledGoFiles {
 		if cleanedFileNames[filepath.Base(file)] {
 			continue
@@ -349,22 +335,31 @@ func parseDirectivesFromPackage(fileCh chan<- fileContent, pkg *packages.Package
 		if len(errs) != 0 {
 			// ignore unknown directives
 			for _, e := range errs {
-				Warn("ignored directive", "err", e)
+				logger.Warn("ignored directive", "err", e)
 			}
 		}
 	}
 	return
 }
 
-var startDirective = []byte(startDirectiveStr)
+var startDirective0 = []byte(startDirectiveStr0)
+var startDirective1 = []byte(startDirectiveStr1)
 var startDirective2 = []byte(startDirectiveStr2)
+
+func maxStr(s string) string {
+	idx := strings.IndexByte(s, '\n')
+	if idx == -1 {
+		return s
+	}
+	return s[:idx]
+}
 
 func parseDirectivesFromBody(body []byte, directives, inlineDirectives *[]Directive) (errs []error) {
 
 	// store processing directives
 	var tmp []Directive
 	lastIdx := -1
-	if bytes.HasPrefix(body, startDirective) || bytes.HasPrefix(body, startDirective2) {
+	if bytes.HasPrefix(body, startDirective0) || bytes.HasPrefix(body, startDirective1) || bytes.HasPrefix(body, startDirective2) {
 		lastIdx = 0
 	}
 	for idx := 0; idx < len(body); idx++ {
@@ -377,12 +372,12 @@ func parseDirectivesFromBody(body []byte, directives, inlineDirectives *[]Direct
 			line := body[lastIdx:idx]
 			lastIdx = -1
 
-			ds, err := ParseDirective(string(line))
+			directive, err := ParseDirective(string(line))
 			if err != nil {
 				errs = append(errs, err)
 				continue
 			}
-			tmp = append(tmp, ds...)
+			tmp = append(tmp, directive)
 		}
 		// directives are followed by a blank line, accept them
 		if idx+1 < len(body) && body[idx+1] == '\n' {
@@ -390,7 +385,7 @@ func parseDirectivesFromBody(body []byte, directives, inlineDirectives *[]Direct
 			tmp = tmp[:0]
 		}
 		// find the next directive
-		if !bytes.HasPrefix(body[idx+1:], startDirective) && idx+1 != len(body) {
+		if !bytes.HasPrefix(body[idx+1:], startDirective0) && !bytes.HasPrefix(body[idx+1:], startDirective1) && idx+1 != len(body) {
 			// put directives not followed by a blank line into inline directives
 			if inlineDirectives != nil {
 				*inlineDirectives = append(*inlineDirectives, tmp...)
@@ -414,15 +409,18 @@ func (ng *engine) validateConfig(cfg *Config) (_err error) {
 
 	// populate enabledPlugins
 	if cfg.EnabledPlugins != nil {
-		for _, enabled := range cfg.EnabledPlugins {
-			pl := ng.pluginsMap[enabled]
-			if pl == nil {
-				return Errorf(nil, "plugin %v not found", enabled)
+		for name, enabled := range cfg.EnabledPlugins {
+			if enabled {
+				pl := ng.pluginsMap[name]
+				if pl == nil {
+					return Errorf(nil, "plugin %v not found", name)
+				}
+				pl.enabled = true
+				ng.enabledPlugins = append(ng.enabledPlugins, pl)
 			}
-			pl.enabled = true
-			ng.enabledPlugins = append(ng.enabledPlugins, pl)
 		}
 	} else {
+		// enable all plugins
 		for _, pl := range ng.plugins {
 			pl.enabled = true
 		}
@@ -430,7 +428,7 @@ func (ng *engine) validateConfig(cfg *Config) (_err error) {
 	}
 
 	if cfg.GenerateFileName == nil {
-		cfg.GenerateFileName = defaultGeneratedFileName(defaultGeneratedFileNameTpl)
+		cfg.GenerateFileName = defaultFileNameGenerator(defaultGeneratedFileNameTpl)
 	}
 
 	if ng.bufPool.New == nil {
@@ -460,7 +458,7 @@ func (ng *engine) execGoimport(files []string) error {
 	args = append(args, "-w")
 	args = append(args, files...)
 	cmd := exec.Command("goimports", args...)
-	Debug("goimports", "args", args)
+	ng.logger.Debug("goimports", "args", args)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return Errorf(err, "goimports: %s\n\n%s\n", err, out)

@@ -38,15 +38,6 @@ type pluginStruct struct {
 	qualifier types.Qualifier
 }
 
-func RegisterPlugin(plugins ...Plugin) error {
-	for _, plugin := range plugins {
-		if err := theEngine.registerPlugin(plugin); err != nil {
-			return Errorf(err, "register plugin %v: %v", plugin.Name(), err)
-		}
-	}
-	return nil
-}
-
 func (ng *engine) registerPlugin(plugin Plugin) error {
 	name := plugin.Name()
 	if name == "" {

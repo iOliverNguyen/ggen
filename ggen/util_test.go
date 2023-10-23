@@ -23,125 +23,64 @@ func TestBuiltinTypes(t *testing.T) {
 
 func TestParseGoBuild(t *testing.T) {
 	t.Run("go:build", func(t *testing.T) {
-		directives, err := ParseDirective("go:build")
+		directive, err := ParseDirective("go:build")
 		require.NoError(t, err)
-		require.Equal(t, []Directive{
-			{
-				Raw: "go:build",
-				Cmd: "build",
-				Arg: "",
-			},
-		}, directives)
+		require.Equal(t, Directive{
+			Raw: "go:build",
+			Cmd: "go:build",
+			Arg: "",
+		}, directive)
 	})
-	t.Run("go:build generator", func(t *testing.T) {
-		directives, err := ParseDirective("go:build generator")
+	t.Run("go:build ggen", func(t *testing.T) {
+		directive, err := ParseDirective("go:build ggen")
 		require.NoError(t, err)
-		require.Equal(t, []Directive{
-			{
-				Raw: "go:build generator",
-				Cmd: "build",
-				Arg: "generator",
-			},
-		}, directives)
+		require.Equal(t, Directive{
+			Raw: "go:build ggen",
+			Cmd: "go:build",
+			Arg: "ggen",
+		}, directive)
 	})
 }
 
 func TestParseDirective(t *testing.T) {
 	t.Run("empty", func(t *testing.T) {
-		parser := &directiveParser{}
-		directives, err := parser.parseDirective("")
+		directive, err := parsePlusDirective("")
 		require.NoError(t, err)
-		require.Empty(t, directives)
+		require.Empty(t, directive)
+	})
+	t.Run("ignore", func(t *testing.T) {
+		_, err := parsePlusDirective("+++")
+		require.NoError(t, err)
 	})
 	t.Run("invalid", func(t *testing.T) {
-		parser := &directiveParser{}
-		directives, err := parser.parseDirective("invalid")
+		_, err := parsePlusDirective("+a+")
 		require.Error(t, err)
-		require.Empty(t, []Directive{}, directives)
 	})
-	t.Run("single", func(t *testing.T) {
-		parser := &directiveParser{}
-		directives, err := parser.parseDirective("+sample")
+	t.Run("sample", func(t *testing.T) {
+		directive, err := parsePlusDirective("+sample")
 		require.NoError(t, err)
-		require.Equal(t, directives, parser.result)
-		require.Equal(t, []Directive{
-			{
-				Raw: "+sample",
-				Cmd: "sample",
-				Arg: "",
-			},
-		}, directives)
+		require.Equal(t, Directive{
+			Raw: "+sample",
+			Cmd: "sample",
+			Arg: "",
+		}, directive)
 	})
-	t.Run("single with args", func(t *testing.T) {
-		parser := &directiveParser{}
-		directives, err := parser.parseDirective("+sample=arg1,arg2")
+	t.Run("sample with args", func(t *testing.T) {
+		directive, err := parsePlusDirective("+sample arg1,arg2")
 		require.NoError(t, err)
-		require.Equal(t, directives, parser.result)
-		require.Equal(t, []Directive{
-			{
-				Raw: "+sample=arg1,arg2",
-				Cmd: "sample",
-				Arg: "arg1,arg2",
-			},
-		}, directives)
+		require.Equal(t, Directive{
+			Raw: "+sample arg1,arg2",
+			Cmd: "sample",
+			Arg: "arg1,arg2",
+		}, directive)
 	})
-	t.Run("single with args (2)", func(t *testing.T) {
-		parser := &directiveParser{}
-		directives, err := parser.parseDirective("+sample=arg1,key2=arg2")
+	t.Run("sample with spaces in args", func(t *testing.T) {
+		directive, err := parsePlusDirective("+sample -key1=arg1 -key2=arg2")
 		require.NoError(t, err)
-		require.Equal(t, directives, parser.result)
-		require.Equal(t, []Directive{
-			{
-				Raw: "+sample=arg1,key2=arg2",
-				Cmd: "sample",
-				Arg: "arg1,key2=arg2",
-			},
-		}, directives)
-	})
-	t.Run("multiple", func(t *testing.T) {
-		parser := &directiveParser{}
-		directives, err := parser.parseDirective("+three +sample +directives")
-		require.NoError(t, err)
-		require.Equal(t, directives, parser.result)
-		require.Equal(t, []Directive{
-			{
-				Raw: "+three",
-				Cmd: "three",
-				Arg: "",
-			},
-			{
-				Raw: "+sample",
-				Cmd: "sample",
-				Arg: "",
-			},
-			{
-				Raw: "+directives",
-				Cmd: "directives",
-				Arg: "",
-			},
-		}, directives)
-	})
-	t.Run("multiple with args", func(t *testing.T) {
-		parser := &directiveParser{}
-		directives, err := parser.parseDirective("+three=arg1 +sample=arg2 +directives=arg3")
-		require.NoError(t, err)
-		require.Equal(t, directives, parser.result)
-		require.Equal(t, []Directive{
-			{
-				Raw: "+three=arg1",
-				Cmd: "three",
-				Arg: "arg1",
-			},
-			{
-				Raw: "+sample=arg2",
-				Cmd: "sample",
-				Arg: "arg2",
-			},
-			{
-				Raw: "+directives=arg3",
-				Cmd: "directives",
-				Arg: "arg3",
-			},
-		}, directives)
+		require.Equal(t, Directive{
+			Raw: "+sample -key1=arg1 -key2=arg2",
+			Cmd: "sample",
+			Arg: "-key1=arg1 -key2=arg2",
+		}, directive)
 	})
 }

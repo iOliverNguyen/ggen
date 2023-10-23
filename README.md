@@ -3,7 +3,7 @@
 ## Install
 
 ```
-go get github.com/iolivernguyen/ggen/cmd/ggen
+go get github.com/iolivernguyen/ggen
 ```
 
 ## Usage

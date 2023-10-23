@@ -41,14 +41,30 @@ func (c Comment) Text() string {
 // therefore it will be parsed as a single directive.
 type Directive struct {
 	Raw string // +foo:pkg:foo this is a string
-
 	Cmd string // foo:pkg
-
 	Arg string // sample,baz
+
+	Item Positioner // the item that the directive is attached to
 }
 
 func (d Directive) String() string {
 	return d.Raw
+}
+
+func (d Directive) IsPackageLevel() bool {
+	return d.Item == nil
+}
+
+// ParseArgs parse directive argument using the standard "flag" package format. Example:
+//
+//  +ggen:sample -name=Alice DoSomething
+func (d Directive) GetArgs() ([]string, error) {
+	if d.Arg == "" {
+		return nil, nil
+	}
+	// TODO(iolivernguyen): handle escape
+	//   +ggen:sample -name="Alice M"
+	return strings.Split(d.Arg, " "), nil
 }
 
 type Directives []Directive
@@ -71,7 +87,17 @@ func (ds Directives) GetArg(cmd string) string {
 	return ""
 }
 
+// FilterBy returns list of directives that have the given command.
+// Examples of accepted directives with input "+ggen:sample" or "ggen:sample"
+//
+//   // +ggen:sample
+//   // +ggen:sample:foo
+//   // +ggen:sample:foo argument
+//
 func (ds Directives) FilterBy(prefix string) Directives {
+	if strings.HasPrefix(prefix, "+") {
+		prefix = prefix[1:]
+	}
 	if !strings.HasSuffix(prefix, ":") {
 		prefix = prefix + ":"
 	}
@@ -132,7 +158,7 @@ func (x *extendedInfo) addFile(pkg *packages.Package, file *ast.File) error {
 		}
 		comment, err := processDoc(doc, cmt)
 		if err != nil {
-			Debug("error while processing doc", "err", err)
+			logger.Debug("error while processing doc", "err", err)
 		}
 		return &declaration{
 			Pkg:     pkg,

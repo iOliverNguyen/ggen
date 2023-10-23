@@ -13,14 +13,17 @@ import (
 	"golang.org/x/tools/go/packages"
 
 	_ "github.com/iolivernguyen/ggen/builtin"
+	"github.com/pkg/errors"
 )
 
 const defaultGeneratedFileNameTpl = "zz_generated.%v.go"
 const defaultBufSize = 1024 * 4
-const startDirectiveStr = "// +"   // +directive
-const startDirectiveStr2 = "//go:" // go:build generator
+const startDirectiveStr0 = "//+"   //   //+directive
+const startDirectiveStr1 = "// +"  //   //+directive
+const startDirectiveStr2 = "//go:" //   //go:build ggen
 
-var reCommand = regexp.MustCompile(`[a-z]([a-z0-9.:-]*[a-z0-9])?`)
+var reAlphabet = regexp.MustCompile(`[a-z]`)
+var reCommand = regexp.MustCompile(`^[a-z]([a-z0-9.:-]*[a-z0-9])?$`)
 
 func FilterByCommand(command string) CommandFilter {
 	return CommandFilter(command)
@@ -58,13 +61,14 @@ func (cmd CommandFilter) Include(ds Directives) bool {
 	return false
 }
 
-func defaultGeneratedFileName(tpl string) func(GenerateFileNameInput) string {
+func defaultFileNameGenerator(tpl string) func(GenerateFileNameInput) string {
 	return func(input GenerateFileNameInput) string {
-		return fmt.Sprintf(tpl, input.PluginName)
+		return fmt.Sprintf(tpl, strings.ReplaceAll(input.PluginName, "-", "_"))
 	}
 }
 
-var builtinPath = reflect.TypeOf((*Engine)(nil)).Elem().PkgPath() + "/builtin"
+var ggenPath = reflect.TypeOf((*Engine)(nil)).Elem().PkgPath()
+var builtinPath = filepath.Dir(ggenPath) + "/builtin"
 
 func parseBuiltinTypes(pkg *packages.Package) map[string]types.Type {
 	if pkg.PkgPath != builtinPath {
@@ -90,7 +94,9 @@ func getPackageDir(pkg *packages.Package) string {
 }
 
 func hasStartDirective(line string) bool {
-	return strings.HasPrefix(line, startDirectiveStr) || strings.HasPrefix(line, startDirectiveStr2)
+	return strings.HasPrefix(line, startDirectiveStr0) ||
+		strings.HasPrefix(line, startDirectiveStr1) ||
+		strings.HasPrefix(line, startDirectiveStr2)
 }
 
 // processDoc splits directive and text comment
@@ -101,17 +107,17 @@ func processDoc(doc, cmt *ast.CommentGroup) (Comment, error) {
 
 	directives := make([]Directive, 0, 4)
 	for _, line := range doc.List {
-		if hasStartDirective(line.Text) {
+		if !hasStartDirective(line.Text) {
 			continue
 		}
 
 		// remove "// " but keep "+"
 		text := strings.TrimSpace(strings.TrimPrefix(line.Text, "//"))
-		_directives, err := ParseDirective(text)
+		directive, err := ParseDirective(text)
 		if err != nil {
 			return Comment{}, err
 		}
-		directives = append(directives, _directives...)
+		directives = append(directives, directive)
 	}
 
 	comment := Comment{
@@ -153,105 +159,44 @@ func ParseDirectiveFromBody(body []byte) (directives, inlineDirective []Directiv
 }
 
 // ParseDirective parses directives from a single line.
-func ParseDirective(line string) (result []Directive, _ error) {
-	line = strings.TrimSpace(strings.TrimPrefix(line, "//"))
+func ParseDirective(line string) (result Directive, _ error) {
+	line = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "//"))
 	if line == "go:build" || strings.HasPrefix(line, "go:build ") {
-		return parseBuildDirective(line)
+		return parseGoBuildDirective(line)
 	}
 
-	parser := &directiveParser{}
-	result, err := parser.parseDirective(line)
+	result, err := parsePlusDirective(line)
 	if err != nil {
-		return nil, Errorf(err, "%v (%v)", err, line)
+		return result, Errorf(err, "%v (%v)", err, line)
 	}
 	return result, nil
 }
 
-func parseBuildDirective(text string) ([]Directive, error) {
-	arg := strings.TrimPrefix(text, "go:build")
+func parseGoBuildDirective(line string) (Directive, error) {
+	arg := strings.TrimPrefix(line, "go:build")
 	arg = strings.TrimSpace(arg)
 	directive := Directive{
-		Raw: text,
-		Cmd: "build",
+		Raw: line,
+		Cmd: "go:build",
 		Arg: arg,
 	}
-	return []Directive{directive}, nil
+	return directive, nil
 }
 
-type directiveParser struct {
-	result []Directive
-}
-
-func (p *directiveParser) append(directives ...Directive) []Directive {
-	p.result = append(p.result, directives...)
-	return p.result
-}
-
-func (p *directiveParser) parseDirective(text string) (result []Directive, _ error) {
-	defer p.append(result...)
-
-	text = strings.TrimSpace(text)
-	if text == "" {
-		return nil, nil
+func parsePlusDirective(line string) (result Directive, err error) {
+	result.Raw = line
+	line = strings.TrimPrefix(line, "+")
+	idx := strings.IndexByte(line, ' ') //   //+name arg
+	if idx >= 0 {
+		result.Cmd = line[:idx]
+		result.Arg = strings.TrimSpace(line[idx+1:])
+	} else {
+		result.Cmd = line
 	}
-	if text[0] != '+' {
-		return nil, nil
+	if reAlphabet.MatchString(result.Cmd) && !reCommand.MatchString(result.Cmd) {
+		return result, errors.New("invalid directive")
 	}
-	cmdIdx := reCommand.FindStringIndex(text)
-	if cmdIdx == nil {
-		return nil, Errorf(nil, "invalid directive")
-	}
-	if cmdIdx[0] != 1 {
-		return nil, Errorf(nil, "invalid directive")
-	}
-	dtext := text[:cmdIdx[1]]
-	directive := Directive{
-		Cmd: dtext[1:], // remove "+"
-	}
-	remain := text[len(dtext):]
-	if remain == "" {
-		directive.Raw = dtext
-		return p.append(directive), nil
-	}
-	if remain[0] == ' ' || remain[0] == '\t' {
-		directive.Raw = dtext
-		p.append(directive)
-		return p.parseDirective(remain)
-	}
-	if remain[0] == ':' {
-		remain = remain[1:] // remove ":"
-		directive.Raw = text
-		directive.Arg = strings.TrimSpace(remain)
-		if directive.Arg == "" {
-			return nil, Errorf(nil, "invalid directive")
-		}
-		p.append(directive)
-		return p.result, nil
-	}
-	if remain[0] == '=' {
-		remain = remain[1:] // remove "="
-		idx := strings.IndexAny(text, " \t")
-		if idx < 0 {
-			directive.Raw = text
-			directive.Arg = strings.TrimSpace(remain)
-			if directive.Arg == "" {
-				return nil, Errorf(nil, "invalid directive")
-			}
-			p.append(directive)
-			return p.result, nil
-		}
-		directive.Raw = text[:idx]
-		directive.Arg = strings.TrimSpace(text[len(dtext)+1 : idx])
-		if directive.Arg == "" {
-			return nil, Errorf(nil, "invalid directive")
-		}
-		p.append(directive)
-		return p.parseDirective(text[idx:])
-	}
-	if strings.HasPrefix(remain, "_") {
-		return nil, Errorf(nil, "invalid directive (directive commands should contain -, not _)")
-	}
-	return nil, Errorf(nil, "invalid directive")
+	return result, nil
 }
 
 func must(err error) {

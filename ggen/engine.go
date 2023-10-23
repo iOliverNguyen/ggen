@@ -73,13 +73,14 @@ type Engine interface {
 	GetPackage(Positioner) *packages.Package
 	GetPackageByPath(string) *packages.Package
 
-	PrintNode(node ast.Node) error
+	LogDebugNode(node ast.Node) error
 }
 
 var _ Engine = &wrapEngine{}
-var theEngine = newEngine()
 
 type engine struct {
+	logger Logger
+
 	plugins        []*pluginStruct
 	enabledPlugins []*pluginStruct
 	pluginsMap     map[string]*pluginStruct
@@ -102,27 +103,20 @@ type engine struct {
 }
 
 type wrapEngine struct {
-	Logger
-
+	embededLogger
 	*engine
+
 	plugin *pluginStruct
 	pkgs   []*GeneratingPackage
 }
 
-func newEngine() *engine {
+func newEngine(logger Logger) *engine {
 	return &engine{
+		logger:     logger,
 		pkgMap:     make(map[string]*packages.Package),
 		pluginsMap: make(map[string]*pluginStruct),
 		bufPool:    &sync.Pool{},
 	}
-}
-
-func (ng *engine) clone() *engine {
-	result := newEngine()
-	result.plugins = ng.plugins
-	result.pluginsMap = ng.pluginsMap
-	result.bufPool = ng.bufPool
-	return result
 }
 
 func (ng *engine) GetComment(p Positioner) Comment {
@@ -205,6 +199,10 @@ func (ng *engine) GetObjectsByScope(s *types.Scope) []types.Object {
 	return objs
 }
 
+func (ng *wrapEngine) Logger() Logger {
+	return ng.logger
+}
+
 func (ng *wrapEngine) GenerateEachPackage(
 	fn func(Engine, *packages.Package, Printer) error,
 ) error {
@@ -232,10 +230,10 @@ func (ng *wrapEngine) GeneratingPackages() []*GeneratingPackage {
 
 func (ng *wrapEngine) generatingPackages() []*GeneratingPackage {
 	index := ng.plugin.index
-	pkgs := make([]*GeneratingPackage, 0, len(ng.sortedIncludedPackages))
-	for _, p := range ng.sortedIncludedPackages {
+	pkgs := make([]*GeneratingPackage, 0, len(ng.engine.sortedIncludedPackages))
+	for _, p := range ng.engine.sortedIncludedPackages {
 		if p.Included != nil && p.Included[index] {
-			pkg := ng.pkgMap[p.PkgPath]
+			pkg := ng.engine.pkgMap[p.PkgPath]
 			if pkg == nil {
 				continue
 			}
@@ -321,30 +319,31 @@ func (ng *wrapEngine) GenerateFile(pkgName string, filePath string) (Printer, er
 }
 
 func (ng *wrapEngine) GetDirectivesByPackage(pkg *packages.Package) Directives {
-	directives, ok := ng.mapPkgDirectives[pkg.PkgPath]
+	directives, ok := ng.engine.mapPkgDirectives[pkg.PkgPath]
 	if !ok {
 		for _, file := range pkg.GoFiles {
 			body, err := os.ReadFile(file)
 			if err != nil {
 				if os.IsNotExist(err) {
-					Error("ignore not found file", nil, "file", file)
+					ng.Error("ignore not found file", nil, "file", file)
 					continue
 				}
 				panic(err)
 			}
 
+			// only parse package level directives
 			errs := parseDirectivesFromBody(body, &directives, nil)
 			for _, err = range errs {
-				Error("invalid directive from file", err, "file", file)
+				ng.Error("invalid directive from file", err, "file", file)
 			}
 		}
-		ng.mapPkgDirectives[pkg.PkgPath] = directives
+		ng.engine.mapPkgDirectives[pkg.PkgPath] = directives
 	}
 	return cloneDirectives(directives)
 }
 
-func (ng *wrapEngine) PrintNode(node ast.Node) error {
-	return ast.Print(ng.xinfo.Fset, node)
+func (ng *wrapEngine) LogDebugNode(node ast.Node) error {
+	return ast.Print(ng.engine.xinfo.Fset, node)
 }
 
 func cloneDirectives(directives []Directive) []Directive {
