@@ -3,7 +3,7 @@ package ggen
 import (
 	"os"
 
-	"github.com/iolivernguyen/ggen/internal/log"
+	"github.com/iolivernguyen/ggen/ggen/logging"
 )
 
 type GenerateFileNameInput struct {
@@ -56,7 +56,7 @@ func Start(cfg Config, patterns ...string) error {
 	if cfg.LogHandler == nil {
 		cfg.LogHandler = cfg.defaultLogHandler()
 	}
-	logger = log.NewLogger(cfg.LogHandler)
+	logger = logging.NewLogger(cfg.LogHandler)
 
 	ng := newEngine(logger)
 	return ng.start(cfg, patterns...)

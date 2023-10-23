@@ -11,9 +11,9 @@ import (
 )
 
 var flClean = flag.Bool("clean", false, "clean generated files without generating new files")
-var flPlugins = flag.String("plugin", "", "comma separated list of plugins for generating (default to all plugins)")
-var flDisabledPlugins = flag.String("disable", "", "comma separated list of plugins to disable")
-var flNamespace = flag.String("namespace", "", "only parse and generate packages under this namespace (example: github.com/foo)")
+var flPlugin = flag.String("plugin", "", "comma separated list of plugins for generating (default to all plugins)")
+var flNamespace = flag.String("namespace", "", "github.com/myproject")
+var flVerbose = flag.Int("verbose", 0, "enable verbosity (0: info, 4: debug, 8: more debug)")
 
 func usage() {
 	const text = `
@@ -39,23 +39,20 @@ func Start(plugins ...ggen.Plugin) {
 		os.Exit(2)
 	}
 
-	enabledPlugins := allPluginNames(plugins)
-	if *flPlugins != "" {
-		enabledPlugins = strings.Split(*flPlugins, ",")
-	}
-	if *flDisabledPlugins != "" {
-		ignoredPlugins := strings.Split(*flDisabledPlugins, ",")
-		enabledPlugins = calcEnabledPlugins(enabledPlugins, ignoredPlugins)
-	}
-
 	cfg := ggen.Config{
-		CleanOnly:      *flClean,
-		Namespace:      *flNamespace,
-		EnabledPlugins: enabledPlugins,
-		GoimportsArgs:  []string{}, // example: -local github.com/foo
+		LogLevel:      -ggen.LogLevel(*flVerbose),
+		CleanOnly:     *flClean,
+		Namespace:     *flNamespace,
+		GoimportsArgs: []string{}, // example: -local github.com/foo
+	}
+	cfg.RegisterPlugin(plugins...)
+	if *flPlugin != "" {
+		pluginNames := strings.Split(*flPlugin, ",")
+		for _, name := range pluginNames {
+			cfg.EnablePlugin(name)
+		}
 	}
 
-	must(ggen.RegisterPlugin(plugins...))
 	must(ggen.Start(cfg, patterns...))
 }
 
@@ -64,31 +61,4 @@ func must(err error) {
 		fmt.Printf("%+v\n", err)
 		os.Exit(1)
 	}
-}
-
-func allPluginNames(plugins []ggen.Plugin) []string {
-	names := make([]string, len(plugins))
-	for i, p := range plugins {
-		names[i] = p.Name()
-	}
-	return names
-}
-
-func calcEnabledPlugins(plugins []string, ignoredPlugins []string) []string {
-	result := make([]string, 0, len(plugins))
-	for _, p := range plugins {
-		if !contains(ignoredPlugins, p) {
-			result = append(result, p)
-		}
-	}
-	return result
-}
-
-func contains(ss []string, s string) bool {
-	for _, _s := range ss {
-		if _s == s {
-			return true
-		}
-	}
-	return false
 }
