@@ -1,6 +1,7 @@
 package ggen
 
 import (
+	"golang.org/x/exp/slog"
 	"golang.org/x/tools/go/packages"
 )
 
@@ -32,7 +33,7 @@ type includedPackage struct {
 type FilterEngine interface {
 
 	// Plugin should use the embedded logger to log messages.
-	Logger
+	L() *slog.Logger
 
 	// IncludePackage indicates that the given package will be included for generating. It will be returned later in
 	// Engine.GeneratingPackages(). If it does not exist, an error with be returned later.
@@ -74,13 +75,17 @@ type FilterEngine interface {
 var _ FilterEngine = &filterEngine{}
 
 type filterEngine struct {
-	Logger
+	logger *slog.Logger
 
 	ng       *engine
 	plugin   *pluginStruct
 	pkgs     []filteringPackage
 	pkgMap   map[string][]bool
 	patterns *[]string
+}
+
+func (ng *filterEngine) L() *slog.Logger {
+	return ng.logger
 }
 
 // IncludePackage indicates that the given package will be included for generating. It will be returned later in

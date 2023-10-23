@@ -47,6 +47,10 @@ type Directive struct {
 	Arg string // sample,baz
 }
 
+func (d Directive) String() string {
+	return d.Raw
+}
+
 type Directives []Directive
 
 func (ds Directives) Get(cmd string) (Directive, bool) {

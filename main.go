@@ -11,8 +11,8 @@ import (
 )
 
 var flClean = flag.Bool("clean", false, "clean generated files without generating new files")
-var flPlugins = flag.String("plugins", "", "comma separated list of plugins for generating (default to all plugins)")
-var flIgnoredPlugins = flag.String("ignored-plugins", "", "comma separated list of plugins to ignore")
+var flPlugins = flag.String("plugin", "", "comma separated list of plugins for generating (default to all plugins)")
+var flDisabledPlugins = flag.String("disable", "", "comma separated list of plugins to disable")
 var flNamespace = flag.String("namespace", "", "only parse and generate packages under this namespace (example: github.com/foo)")
 
 func usage() {
@@ -43,8 +43,8 @@ func Start(plugins ...ggen.Plugin) {
 	if *flPlugins != "" {
 		enabledPlugins = strings.Split(*flPlugins, ",")
 	}
-	if *flIgnoredPlugins != "" {
-		ignoredPlugins := strings.Split(*flIgnoredPlugins, ",")
+	if *flDisabledPlugins != "" {
+		ignoredPlugins := strings.Split(*flDisabledPlugins, ",")
 		enabledPlugins = calcEnabledPlugins(enabledPlugins, ignoredPlugins)
 	}
 

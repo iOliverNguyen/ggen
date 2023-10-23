@@ -1,8 +1,6 @@
-package sample
+package decorator
 
-import (
-	"github.com/iolivernguyen/ggen/ggen"
-)
+import "github.com/iolivernguyen/ggen/ggen"
 
 func New() ggen.Plugin {
 	return plugin{}
@@ -12,12 +10,11 @@ var _ ggen.Filterer = plugin{}
 
 type plugin struct{}
 
-func (p plugin) Name() string { return "sample" }
+func (p plugin) Name() string { return "decorator" }
 
 func (p plugin) Filter(ft ggen.FilterEngine) error {
 	for _, pkg := range ft.ParsingPackages() {
-		ft.IncludePackage(pkg.PkgPath)
-		ft.Debug("include package", "pkg", pkg.PkgPath)
+		ft.Debug("directives", "pkg", pkg.PkgPath, "directives", pkg.Directives)
 	}
 	return nil
 }
