@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -86,8 +87,10 @@ func (ng *engine) start(cfg Config, patterns ...string) (_err error) {
 	}
 	{
 		sortedIncludedPackages := make([]includedPackage, 0, len(ng.includedPackages))
-		for pkgPath, included := range ng.includedPackages {
-			sortedIncludedPackages = append(sortedIncludedPackages, includedPackage{pkgPath, included})
+		for pkgPath, includedFlags := range ng.includedPackages {
+			if slices.Index(includedFlags, true) >= 0 {
+				sortedIncludedPackages = append(sortedIncludedPackages, includedPackage{pkgPath, includedFlags})
+			}
 		}
 		sort.Slice(sortedIncludedPackages, func(i, j int) bool {
 			return sortedIncludedPackages[i].PkgPath < sortedIncludedPackages[j].PkgPath
@@ -149,6 +152,7 @@ func (ng *engine) start(cfg Config, patterns ...string) (_err error) {
 		packages.Visit(pkgs,
 			func(pkg *packages.Package) bool {
 				ng.pkgMap[pkg.PkgPath] = pkg
+				ng.dir2pkg[GetPkgDir(pkg)] = pkg
 				return true
 			}, nil)
 
@@ -432,7 +436,7 @@ func (ng *engine) validateConfig(cfg *Config) (_err error) {
 	}
 
 	if ng.bufPool.New == nil {
-		ng.bufPool.New = func() interface{} {
+		ng.bufPool.New = func() any {
 			return bytes.NewBuffer(make([]byte, 0, defaultBufSize))
 		}
 	}

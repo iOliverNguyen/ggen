@@ -1,12 +1,11 @@
 package ggen
 
 import (
+	"fmt"
 	"go/ast"
 	"go/token"
 	"go/types"
-	"io/ioutil"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -25,6 +24,14 @@ type GeneratingPackage struct {
 	plugin     *pluginStruct
 	engine     *engine
 	printer    *printer
+}
+
+func (g *GeneratingPackage) GetDir() string {
+	dir := getPackageDir(g.Package)
+	if dir == "" {
+		panic(fmt.Sprintf("can not get directory of package %q", g.PkgPath))
+	}
+	return dir
 }
 
 func (g *GeneratingPackage) GetPrinter() Printer {
@@ -89,6 +96,7 @@ type engine struct {
 	xinfo   *extendedInfo
 	pkgcfg  packages.Config
 	pkgMap  map[string]*packages.Package
+	dir2pkg map[string]*packages.Package
 	srcMap  map[string][]byte
 	bufPool *sync.Pool
 
@@ -114,6 +122,7 @@ func newEngine(logger Logger) *engine {
 	return &engine{
 		logger:     logger,
 		pkgMap:     make(map[string]*packages.Package),
+		dir2pkg:    make(map[string]*packages.Package),
 		pluginsMap: make(map[string]*pluginStruct),
 		bufPool:    &sync.Pool{},
 	}
@@ -273,29 +282,35 @@ func (ng *wrapEngine) GeneratePackage(pkg *packages.Package, fileName string) (P
 }
 
 func (ng *wrapEngine) GenerateFile(pkgName string, filePath string) (Printer, error) {
-	if pkgName == "" {
-		return nil, Errorf(nil, "empty package name")
-	}
+	var pkg *types.Package
 	if filePath == "" {
 		return nil, Errorf(nil, "empty file path")
 	}
+	dir := filepath.Dir(filePath)
+	if pkg0 := ng.dir2pkg[dir]; pkg0 != nil {
+		pkg = pkg0.Types
+		pkgName = pkg0.Name
+	}
+	if pkgName == "" {
+		return nil, Errorf(nil, "empty package name")
+	}
+
 	if strings.HasSuffix(filePath, "/") {
 		fileName := generateFileName(ng.engine, ng.plugin)
 		filePath = filepath.Join(filePath, fileName)
 	}
 	{
-		dir := filepath.Dir(filePath)
-		output, err := exec.Command("mkdir", "-p", dir).CombinedOutput()
+		err := os.MkdirAll(dir, 0755)
 		if err != nil {
-			return nil, Errorf(err, "create directory %v: %s (%v)", dir, output, err)
+			return nil, Errorf(err, "create directory %q: %v", dir, err)
 		}
 		file, err := os.Open(dir)
 		if err != nil {
-			return nil, Errorf(err, "can not read dir %v: %v", dir, err)
+			return nil, Errorf(err, "can not read dir %q: %v", dir, err)
 		}
 		names, err := file.Readdirnames(-1)
 		if err != nil {
-			return nil, Errorf(err, "can not read dir %v: %v", dir, err)
+			return nil, Errorf(err, "can not read dir %q: %v", dir, err)
 		}
 		found := false
 		for _, name := range names {
@@ -308,14 +323,14 @@ func (ng *wrapEngine) GenerateFile(pkgName string, filePath string) (Printer, er
 			// create an empty doc.go for working around "can not find module
 			// providing package ..." error
 			docFile := filepath.Join(dir, "doc.go")
-			err = ioutil.WriteFile(docFile, []byte("package "+pkgName), 0644)
+			err = os.WriteFile(docFile, []byte("package "+pkgName), 0644)
 			if err != nil {
 				return nil, Errorf(err, "can not write file %v: %v", docFile, err)
 			}
 		}
 	}
-	prt := newPrinter(ng.engine, ng.plugin, nil, pkgName, filePath)
-	return prt, nil
+	pr := newPrinter(ng.engine, ng.plugin, pkg, pkgName, filePath)
+	return pr, nil
 }
 
 func (ng *wrapEngine) GetDirectivesByPackage(pkg *packages.Package) Directives {

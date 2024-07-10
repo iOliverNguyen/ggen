@@ -12,8 +12,9 @@ import (
 
 	"golang.org/x/tools/go/packages"
 
-	_ "github.com/iolivernguyen/ggen/builtin"
 	"github.com/pkg/errors"
+
+	_ "github.com/iolivernguyen/ggen/builtin"
 )
 
 const defaultGeneratedFileNameTpl = "zz_generated.%v.go"
@@ -59,6 +60,39 @@ func (cmd CommandFilter) Include(ds Directives) bool {
 		}
 	}
 	return false
+}
+
+func GetPkgDir(pkg *packages.Package) string {
+	if pkg != nil && len(pkg.CompiledGoFiles) > 0 {
+		return filepath.Dir(pkg.CompiledGoFiles[0])
+	}
+	return ""
+}
+
+func GetPkgPath(pkg *types.Package) string {
+	if pkg != nil {
+		return pkg.Path()
+	}
+	return ""
+}
+
+func GetPkgPathOfType(typ types.Type) string {
+	for {
+		ptr, ok := typ.(*types.Pointer)
+		if !ok {
+			break
+		}
+		typ = ptr.Elem()
+	}
+	named, ok := typ.(*types.Named)
+	if !ok {
+		return ""
+	}
+	pkg := named.Obj().Pkg()
+	if pkg != nil {
+		return pkg.Path()
+	}
+	return ""
 }
 
 func defaultFileNameGenerator(tpl string) func(GenerateFileNameInput) string {

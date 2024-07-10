@@ -10,11 +10,15 @@ import (
 )
 
 type Printer interface {
+	PkgPath() string // note: may be empty
 	FilePath() string
 	Import(name, path string)
 	Qualifier(pkg *types.Package) string
 	TypeString(types.Type) string
+	Printf(msg string, args ...any)
 	Bytes() []byte
+
+	GetPkgPathByImportAlias(string) string
 
 	io.WriteCloser
 }
@@ -55,6 +59,15 @@ func (p *printer) FilePath() string {
 	return p.filePath
 }
 
+func (p *printer) PkgPath() string {
+	return GetPkgPath(p.pkg)
+}
+
+func (p *printer) Printf(msg string, args ...any) {
+	_, err := fmt.Fprintf(p, msg, args...)
+	must(err)
+}
+
 func (p *printer) Write(data []byte) (n int, err error) {
 	if p.closed {
 		panic("already closed")
@@ -87,7 +100,7 @@ func (p *printer) Close() (_err error) {
 		}
 	}()
 
-	fprintf := func(format string, args ...interface{}) {
+	fprintf := func(format string, args ...any) {
 		if _err != nil {
 			return
 		}
@@ -110,6 +123,9 @@ func (p *printer) Close() (_err error) {
 }
 
 func (p *printer) Import(name, path string) {
+	if p.pkg != nil && p.pkg.Path() == path {
+		return
+	}
 	if _, ok := p.aliasByPkgPath[path]; ok {
 		return
 	}
@@ -128,6 +144,10 @@ func (p *printer) Import(name, path string) {
 	}
 	p.pkgPathByAlias[alias] = path
 	p.aliasByPkgPath[path] = alias
+}
+
+func (p *printer) GetPkgPathByImportAlias(alias string) string {
+	return p.pkgPathByAlias[alias]
 }
 
 func (p *printer) TypeString(typ types.Type) string {

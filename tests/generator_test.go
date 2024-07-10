@@ -60,14 +60,12 @@ func reset() {
 		return
 	}
 	registered = true
-	if err := ggen.RegisterPlugin(mock); err != nil {
-		panic(err)
-	}
 }
 
 func TestObjects(t *testing.T) {
 	reset()
 	cfg := ggen.Config{}
+	cfg.RegisterPlugin(mock)
 	err := ggen.Start(cfg, testPatterns)
 	require.NoError(t, err)
 
@@ -83,19 +81,19 @@ func TestObjects(t *testing.T) {
 	{
 		directives := ng.GetDirectives(objects[0])
 		require.Len(t, directives, 1)
-		require.Equal(t, "gen", directives[0].Cmd)
+		require.Equal(t, "ggen:a", directives[0].Cmd)
 	}
 	{
 		directives := ng.GetDirectives(objects[1])
 		require.Len(t, directives, 1)
-		require.Equal(t, "gen:b", directives[0].Cmd)
+		require.Equal(t, "ggen:b", directives[0].Cmd)
 	}
 	{
 		objA := objects[0]
 		cmt := ng.GetComment(objA)
 		require.Equal(t, "this is comment of A\n", cmt.Text())
 		require.Len(t, cmt.Directives, 1)
-		require.Equal(t, "gen", cmt.Directives[0].Cmd)
+		require.Equal(t, "ggen:a", cmt.Directives[0].Cmd)
 
 		st, ok := objA.Type().Underlying().(*types.Struct)
 		require.True(t, ok, "should be *types.Struct")
@@ -129,6 +127,7 @@ func TestGenerate(t *testing.T) {
 	}
 
 	cfg := ggen.Config{}
+	cfg.RegisterPlugin(mock)
 	err := ggen.Start(cfg, testPatterns)
 	require.NoError(t, err)
 
@@ -147,6 +146,7 @@ func TestGenerate(t *testing.T) {
 func TestClean(t *testing.T) {
 	reset()
 	cfg := ggen.Config{CleanOnly: true}
+	cfg.RegisterPlugin(mock)
 	err := ggen.Start(cfg, testPatterns)
 	require.NoError(t, err)
 
@@ -167,6 +167,7 @@ func TestInclude(t *testing.T) {
 	}
 
 	cfg := ggen.Config{}
+	cfg.RegisterPlugin(mock)
 	err := ggen.Start(cfg, testPatterns)
 	require.NoError(t, err)
 

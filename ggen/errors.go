@@ -99,7 +99,7 @@ func (w *withMessage) Format(s fmt.State, verb rune) {
 	}
 }
 
-func Errorf(err error, format string, args ...interface{}) error {
+func Errorf(err error, format string, args ...any) error {
 	msg := fmt.Sprintf(format, args...)
 	if err != nil {
 		if _, ok := err.(stacker); !ok {

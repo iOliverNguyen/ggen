@@ -1,10 +1,10 @@
 package one
 
-// +gen:sample=10
+// +ggen:sample 10
 
 // this is comment of A
 //
-// +gen: this directive should be ignored from comment text
+// +ggen:a this directive should be ignored from comment text
 type A struct {
 	Zero struct{}
 
@@ -19,7 +19,7 @@ type A struct {
 	Three bool
 }
 
-// +gen:b: this directive should be ignored
+// +ggen:b this directive should be ignored
 type B int
 
-// +gen:last: 20: number:int * x
+// +ggen:last 20: number:int * x
